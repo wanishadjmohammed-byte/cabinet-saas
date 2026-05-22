@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+@layer base {
+  :root {
+    --background: 36 20% 97%;
+    --foreground: 20 14% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 20 14% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14% 8%;
+
+    --primary: 4 67% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 8% 94%;
+    --secondary-foreground: 20 10% 20%;
+
+    --muted: 30 8% 93%;
+    --muted-foreground: 25 5% 48%;
+
+    --accent: 30 8% 93%;
+    --accent-foreground: 20 10% 20%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 10% 88%;
+    --input: 30 10% 88%;
+    --ring: 4 67% 45%;
+
+    --radius: 0.375rem;
+
+    /* Status colors */
+    --paye: 142 71% 35%;
+    --partiel: 38 92% 45%;
+    --impaye: 4 67% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  .text-paye { color: hsl(var(--paye)); }
+  .text-partiel { color: hsl(var(--partiel)); }
+  .text-impaye { color: hsl(var(--impaye)); }
+  .bg-paye\/10 { background-color: hsl(var(--paye) / 0.1); }
+  .bg-partiel\/10 { background-color: hsl(var(--partiel) / 0.1); }
+  .bg-impaye\/10 { background-color: hsl(var(--impaye) / 0.1); }
+  .border-paye\/20 { border-color: hsl(var(--paye) / 0.2); }
+  .border-partiel\/20 { border-color: hsl(var(--partiel) / 0.2); }
+  .border-impaye\/20 { border-color: hsl(var(--impaye) / 0.2); }
+}
