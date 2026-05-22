@@ -15,6 +15,7 @@ import {
   LogOut,
   ChevronRight,
 } from "lucide-react"
+import Image from "next/image"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
@@ -154,12 +155,7 @@ export function Sidebar({ role, userName }: SidebarProps) {
         className="flex h-14 items-center gap-2.5 px-4 border-b"
         style={{ borderColor: "#1E1E1E" }}
       >
-        <div
-          className="w-6 h-6 rounded flex items-center justify-center shrink-0"
-          style={{ background: "#C0392B" }}
-        >
-          <Stethoscope className="w-3 h-3 text-white" />
-        </div>
+        <Image src="/logo.png" alt="Logo Dr. Ounnas" width={32} height={32} className="rounded-full shrink-0" />
         <div className="min-w-0">
           <p className="text-white text-xs font-semibold truncate leading-none">
             Dr. Ounnas

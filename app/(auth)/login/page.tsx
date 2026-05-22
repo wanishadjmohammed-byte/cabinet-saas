@@ -5,7 +5,8 @@ export const dynamic = "force-dynamic"
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff, Stethoscope } from "lucide-react"
+import { Eye, EyeOff } from "lucide-react"
+import Image from "next/image"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -42,15 +43,7 @@ export default function LoginPage() {
       >
         <div>
           <div className="flex items-center gap-3 mb-12">
-            <div
-              className="w-8 h-8 rounded-md flex items-center justify-center"
-              style={{ background: "#C0392B" }}
-            >
-              <Stethoscope className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-white font-semibold text-sm tracking-wide">
-              Cabinet Médical
-            </span>
+            <Image src="/logo.png" alt="Logo Dr. Ounnas" width={48} height={48} className="rounded-full" />
           </div>
 
           <div className="space-y-6">
@@ -60,8 +53,7 @@ export default function LoginPage() {
               <span style={{ color: "#C0392B" }}>Dr. Ounnas</span>
             </h1>
             <p className="text-sm leading-relaxed" style={{ color: "#888888" }}>
-              Plateforme de gestion dédiée à la rhumatologie et médecine
-              ostéo-articulaire. RDV, consultations, paiements et trésorerie
+              Plateforme de gestion du cabinet de docteur Ounnas: RDV, consultations, paiements et trésorerie
               en un seul endroit.
             </p>
           </div>
@@ -87,7 +79,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-xs" style={{ color: "#555555" }}>
-          Spécialité Rhumatologie / Ostéo-articulaire · Staoueli, Algérie
+          Spécialité Orthopédie / Ostéo-articulaire · Staoueli, Algérie
         </p>
       </div>
 
@@ -96,12 +88,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="flex items-center gap-2 mb-8 lg:hidden">
-            <div
-              className="w-7 h-7 rounded flex items-center justify-center"
-              style={{ background: "#C0392B" }}
-            >
-              <Stethoscope className="w-3.5 h-3.5 text-white" />
-            </div>
+            <Image src="/logo.png" alt="Logo Dr. Ounnas" width={36} height={36} className="rounded-full" />
             <span className="font-semibold text-sm">Cabinet Dr. Ounnas</span>
           </div>
 
