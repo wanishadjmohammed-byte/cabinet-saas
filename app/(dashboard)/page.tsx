@@ -1,3 +1,8 @@
+import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
+import { db } from "@/lib/db"
+import { profiles } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
 import { getDashboardStats } from "@/actions/consultations"
 import { getRdv } from "@/actions/rdv"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,6 +40,13 @@ function KpiCard({
 }
 
 export default async function DashboardPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    const profile = await db.query.profiles.findFirst({ where: eq(profiles.id, user.id) })
+    if (profile && profile.role !== "admin") redirect("/rdv")
+  }
+
   const today = new Date().toISOString().split("T")[0]
   const in7 = format(addDays(new Date(), 7), "yyyy-MM-dd")
 
