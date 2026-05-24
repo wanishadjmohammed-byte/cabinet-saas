@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { createPatient, updatePatient, type PatientFormData } from "@/actions/patients"
+import { createPatient, updatePatient, deletePatient, type PatientFormData } from "@/actions/patients"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { formatCurrency, formatDate, calcAge } from "@/lib/utils"
-import { Plus, Search, User, Pencil } from "lucide-react"
+import { Plus, Search, User, Pencil, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 type PatientRow = {
@@ -44,6 +44,21 @@ export function PatientsClient({ initialPatients }: { initialPatients: PatientRo
     sexe: null, pathologie: null, notesMedicales: null,
   })
   const [editPending, startEditTransition] = useTransition()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [, startDeleteTransition] = useTransition()
+
+  function handleDelete(id: string) {
+    setDeletingId(null)
+    startDeleteTransition(async () => {
+      try {
+        await deletePatient(id)
+        toast.success("Patient supprimé")
+        router.refresh()
+      } catch {
+        toast.error("Impossible de supprimer ce patient — il a des consultations ou des versements liés")
+      }
+    })
+  }
 
   function openEdit(p: PatientRow, e: React.MouseEvent) {
     e.stopPropagation()
@@ -202,12 +217,21 @@ export function PatientsClient({ initialPatients }: { initialPatients: PatientRo
                     {formatCurrency(p.restant)}
                   </TableCell>
                   <TableCell>
-                    <button
-                      onClick={(e) => openEdit(p, e)}
-                      className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                    {deletingId === p.id ? (
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => handleDelete(p.id)} className="text-xs px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 transition-colors">Oui</button>
+                        <button onClick={() => setDeletingId(null)} className="text-xs px-2 py-1 rounded border border-border hover:bg-muted transition-colors">Non</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={(e) => openEdit(p, e)} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setDeletingId(p.id)} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

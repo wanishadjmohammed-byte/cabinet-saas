@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { createVersement, updateVersement, type VersementFormData } from "@/actions/versements"
+import { createVersement, updateVersement, deleteVersement, type VersementFormData } from "@/actions/versements"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { formatCurrency, formatDate, today } from "@/lib/utils"
-import { CreditCard, Pencil } from "lucide-react"
+import { CreditCard, Pencil, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 type Patient = { id: string; prenom: string; nom: string; telephone: string }
@@ -34,6 +34,21 @@ export function VersementsClient({ versements, patients }: { versements: Verseme
   const [editVersement, setEditVersement] = useState<Versement | null>(null)
   const [editForm, setEditForm] = useState({ montant: 0, mode: "especes" as VersementFormData["mode"], type: "total" as VersementFormData["type"], date: "", notes: "" })
   const [editPending, startEditTransition] = useTransition()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [, startDeleteTransition] = useTransition()
+
+  function handleDelete(id: string) {
+    setDeletingId(null)
+    startDeleteTransition(async () => {
+      try {
+        await deleteVersement(id)
+        toast.success("Versement supprimé")
+        router.refresh()
+      } catch {
+        toast.error("Erreur lors de la suppression")
+      }
+    })
+  }
 
   function openEdit(v: Versement, e: React.MouseEvent) {
     e.stopPropagation()
@@ -186,9 +201,21 @@ export function VersementsClient({ versements, patients }: { versements: Verseme
                       <TableCell className="text-sm text-muted-foreground capitalize">{TYPE_LABELS[v.type] ?? v.type}</TableCell>
                       <TableCell className="text-right text-sm font-semibold text-emerald-600">{formatCurrency(v.montant)}</TableCell>
                       <TableCell>
-                        <button onClick={(e) => openEdit(v, e)} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
+                        {deletingId === v.id ? (
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => handleDelete(v.id)} className="text-xs px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 transition-colors">Oui</button>
+                            <button onClick={() => setDeletingId(null)} className="text-xs px-2 py-1 rounded border border-border hover:bg-muted transition-colors">Non</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <button onClick={(e) => openEdit(v, e)} className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); setDeletingId(v.id) }} className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

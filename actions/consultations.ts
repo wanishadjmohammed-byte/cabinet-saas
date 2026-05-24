@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { consultations, sequences, services, patients, versements, couts, rendezVous } from "@/lib/db/schema"
+import { consultations, sequences, patients, versements, couts, rendezVous } from "@/lib/db/schema"
 import { eq, desc } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
@@ -32,6 +32,24 @@ async function nextRef(seqName: string, prefix: string): Promise<string> {
     }
     return `${prefix}-${String(val).padStart(3, "0")}`
   })
+}
+
+export async function deleteConsultation(id: string) {
+  await db.delete(consultations).where(eq(consultations.id, id))
+  revalidatePath("/consultations")
+  revalidatePath("/")
+  return { success: true }
+}
+
+export async function getConsultationByRdvId(rdvId: string) {
+  try {
+    return db.query.consultations.findFirst({
+      where: eq(consultations.rdvId, rdvId),
+      with: { service: true },
+    })
+  } catch {
+    return null
+  }
 }
 
 export async function getConsultations(limit = 50) {
@@ -117,12 +135,13 @@ export async function getDashboardStats() {
     }
 
     // Top services
+    const allServices = await db.query.services.findMany()
+    const serviceMap = Object.fromEntries(allServices.map((s) => [s.id, s.nom]))
     const serviceCounts: Record<string, { nom: string; count: number; ca: number }> = {}
     for (const c of allConsults) {
       if (!c.serviceId) continue
       if (!serviceCounts[c.serviceId]) {
-        const svc = await db.query.services.findFirst({ where: eq(services.id, c.serviceId) })
-        serviceCounts[c.serviceId] = { nom: svc?.nom ?? "—", count: 0, ca: 0 }
+        serviceCounts[c.serviceId] = { nom: serviceMap[c.serviceId] ?? "—", count: 0, ca: 0 }
       }
       serviceCounts[c.serviceId].count++
       serviceCounts[c.serviceId].ca += c.prixFinal

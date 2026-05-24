@@ -18,6 +18,8 @@ export const roleEnum = pgEnum("role", ["receptionniste", "medecin", "admin"])
 export const sexeEnum = pgEnum("sexe", ["H", "F"])
 export const statutRdvEnum = pgEnum("statut_rdv", [
   "confirme",
+  "arrive",
+  "en_consultation",
   "effectue",
   "annule",
   "no_show",

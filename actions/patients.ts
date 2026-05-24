@@ -48,6 +48,10 @@ export async function getPatients(search?: string) {
   }
 }
 
+export async function getPatientInfo(id: string) {
+  return db.query.patients.findFirst({ where: eq(patients.id, id) })
+}
+
 export async function getPatientById(id: string) {
   return db.query.patients.findFirst({
     where: eq(patients.id, id),
@@ -60,25 +64,27 @@ export async function getPatientById(id: string) {
 
 export async function getPatientsWithPayment() {
   try {
-    const all = await db.query.patients.findMany({ orderBy: desc(patients.createdAt) })
-    return Promise.all(
-      all.map(async (p) => {
-        const consults = await db.query.consultations.findMany({ where: eq(consultations.patientId, p.id) })
-        const vers = await db.query.versements.findMany({ where: eq(versements.patientId, p.id) })
-        const montantDuCalc = consults.reduce((s, c) => s + c.prixFinal, 0)
-        const montantDu = p.montantDuCustom ?? montantDuCalc
-        const totalVerse = vers.reduce((s, v) => s + v.montant, 0)
-        const restant = montantDu - totalVerse
-        const pct = montantDu > 0 ? Math.round((totalVerse / montantDu) * 100) : 0
-        const statut =
-          totalVerse >= montantDu && montantDu > 0 ? "paye" :
-          totalVerse > 0 ? "partiel" : "impaye"
-        return { ...p, montantDu, totalVerse, restant, pct, statut } as typeof p & {
-          montantDu: number; totalVerse: number; restant: number; pct: number
-          statut: "paye" | "partiel" | "impaye"
-        }
-      })
-    )
+    const [all, allConsults, allVers] = await Promise.all([
+      db.query.patients.findMany({ orderBy: desc(patients.createdAt) }),
+      db.query.consultations.findMany(),
+      db.query.versements.findMany(),
+    ])
+    return all.map((p) => {
+      const consults = allConsults.filter((c) => c.patientId === p.id)
+      const vers = allVers.filter((v) => v.patientId === p.id)
+      const montantDuCalc = consults.reduce((s, c) => s + c.prixFinal, 0)
+      const montantDu = p.montantDuCustom ?? montantDuCalc
+      const totalVerse = vers.reduce((s, v) => s + v.montant, 0)
+      const restant = montantDu - totalVerse
+      const pct = montantDu > 0 ? Math.round((totalVerse / montantDu) * 100) : 0
+      const statut =
+        totalVerse >= montantDu && montantDu > 0 ? "paye" :
+        totalVerse > 0 ? "partiel" : "impaye"
+      return { ...p, montantDu, totalVerse, restant, pct, statut } as typeof p & {
+        montantDu: number; totalVerse: number; restant: number; pct: number
+        statut: "paye" | "partiel" | "impaye"
+      }
+    })
   } catch {
     return []
   }
@@ -115,6 +121,13 @@ export async function updatePatient(id: string, data: PatientFormData) {
   }).where(eq(patients.id, id))
   revalidatePath("/patients")
   revalidatePath(`/patients/${id}`)
+  return { success: true }
+}
+
+export async function deletePatient(id: string) {
+  await db.delete(patients).where(eq(patients.id, id))
+  revalidatePath("/patients")
+  revalidatePath("/suivi-paiement")
   return { success: true }
 }
 

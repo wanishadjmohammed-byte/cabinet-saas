@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { createConsultation, updateConsultation, type ConsultationFormData } from "@/actions/consultations"
+import { createConsultation, updateConsultation, deleteConsultation, type ConsultationFormData } from "@/actions/consultations"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { formatCurrency, formatDate, today, calcAge } from "@/lib/utils"
-import { Stethoscope, Pencil } from "lucide-react"
+import { Stethoscope, Pencil, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 type Patient = { id: string; prenom: string; nom: string; telephone: string; dateNaissance: string | null }
@@ -34,6 +34,21 @@ export function ConsultationsClient({ consultations, patients, services }: {
   const [editMode, setEditMode] = useState(false)
   const [editForm, setEditForm] = useState({ date: "", prixFinal: 0, diagnostic: "", ordonnance: "", notesMedicales: "" })
   const [editPending, startEditTransition] = useTransition()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [, startDeleteTransition] = useTransition()
+
+  function handleDelete(id: string) {
+    setDeletingId(null)
+    startDeleteTransition(async () => {
+      try {
+        await deleteConsultation(id)
+        toast.success("Consultation supprimée")
+        router.refresh()
+      } catch {
+        toast.error("Erreur lors de la suppression")
+      }
+    })
+  }
 
   function openDetail(c: Consultation) {
     setSelected(c)
@@ -220,24 +235,39 @@ export function ConsultationsClient({ consultations, patients, services }: {
                 <TableHead>Patient</TableHead><TableHead>Âge</TableHead>
                 <TableHead>Service</TableHead>
                 <TableHead className="text-right">Prix final</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
               {consultations.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                   <Stethoscope className="w-8 h-8 mx-auto mb-2 opacity-30" />Aucune consultation
                 </TableCell></TableRow>
               ) : (
                 consultations.map((c) => {
                   const age = calcAge(c.patient?.dateNaissance)
+                  const isDeleting = deletingId === c.id
                   return (
-                    <TableRow key={c.id} className="cursor-pointer hover:bg-accent/50" onClick={() => openDetail(c)}>
+                    <TableRow key={c.id} className="cursor-pointer hover:bg-accent/50" onClick={() => !isDeleting && openDetail(c)}>
                       <TableCell className="text-xs font-mono text-muted-foreground">{c.ref}</TableCell>
                       <TableCell className="text-sm">{formatDate(c.date)}</TableCell>
                       <TableCell className="text-sm font-medium">{c.patient ? `${c.patient.prenom} ${c.patient.nom}` : "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{age !== null ? `${age} ans` : "—"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{c.service?.nom ?? "—"}</TableCell>
                       <TableCell className="text-right text-sm font-semibold">{formatCurrency(c.prixFinal)}</TableCell>
+                      <TableCell>
+                        {isDeleting ? (
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => handleDelete(c.id)} className="text-xs px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 transition-colors">Oui</button>
+                            <button onClick={() => setDeletingId(null)} className="text-xs px-2 py-1 rounded border border-border hover:bg-muted transition-colors">Non</button>
+                          </div>
+                        ) : (
+                          <button onClick={(e) => { e.stopPropagation(); setDeletingId(c.id) }}
+                            className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   )
                 })
