@@ -1,9 +1,27 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import "./globals.css"
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#c03026",
+}
 
 export const metadata: Metadata = {
   title: "Cabinet Dr. Ounnas — Gestion",
   description: "Système de gestion du cabinet médical Dr. Meriem Ounnas",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Cabinet",
+  },
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 }
 
 export default function RootLayout({

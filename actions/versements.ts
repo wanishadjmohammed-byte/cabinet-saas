@@ -1,8 +1,9 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { versements, sequences } from "@/lib/db/schema"
-import { eq, desc } from "drizzle-orm"
+import { versements } from "@/lib/db/schema"
+import { desc } from "drizzle-orm"
+import { nextRef } from "@/lib/db/nextRef"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -17,18 +18,6 @@ const versementSchema = z.object({
 
 export type VersementFormData = z.infer<typeof versementSchema>
 
-async function nextRef(): Promise<string> {
-  return db.transaction(async (tx) => {
-    const existing = await tx.query.sequences.findFirst({ where: eq(sequences.name, "versements") })
-    const val = (existing?.value ?? 0) + 1
-    if (existing) {
-      await tx.update(sequences).set({ value: val }).where(eq(sequences.name, "versements"))
-    } else {
-      await tx.insert(sequences).values({ name: "versements", value: val })
-    }
-    return `V-${String(val).padStart(3, "0")}`
-  })
-}
 
 export async function getVersements(limit = 100) {
   try {
@@ -44,7 +33,7 @@ export async function getVersements(limit = 100) {
 
 export async function createVersement(data: VersementFormData) {
   const v = versementSchema.parse(data)
-  const ref = await nextRef()
+  const ref = await nextRef("V", "versements")
   await db.insert(versements).values({ ref, ...v, notes: v.notes || null })
   revalidatePath("/versements")
   revalidatePath("/suivi-paiement")

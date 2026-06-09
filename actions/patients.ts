@@ -1,8 +1,9 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { patients, sequences, consultations, versements } from "@/lib/db/schema"
+import { patients, consultations, versements } from "@/lib/db/schema"
 import { eq, desc, ilike, or } from "drizzle-orm"
+import { nextRef } from "@/lib/db/nextRef"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -18,18 +19,6 @@ const patientSchema = z.object({
 
 export type PatientFormData = z.infer<typeof patientSchema>
 
-async function nextRef(prefix: string, seqName: string): Promise<string> {
-  return db.transaction(async (tx) => {
-    const existing = await tx.query.sequences.findFirst({ where: eq(sequences.name, seqName) })
-    const val = (existing?.value ?? 0) + 1
-    if (existing) {
-      await tx.update(sequences).set({ value: val }).where(eq(sequences.name, seqName))
-    } else {
-      await tx.insert(sequences).values({ name: seqName, value: val })
-    }
-    return `${prefix}-${String(val).padStart(3, "0")}`
-  })
-}
 
 export async function getPatients(search?: string) {
   try {

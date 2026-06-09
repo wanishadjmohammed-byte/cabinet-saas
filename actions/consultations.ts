@@ -1,8 +1,9 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { consultations, sequences, patients, versements, couts, rendezVous } from "@/lib/db/schema"
+import { consultations, patients, versements, couts, rendezVous } from "@/lib/db/schema"
 import { eq, desc } from "drizzle-orm"
+import { nextRef } from "@/lib/db/nextRef"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -21,18 +22,6 @@ const consultationSchema = z.object({
 
 export type ConsultationFormData = z.infer<typeof consultationSchema>
 
-async function nextRef(seqName: string, prefix: string): Promise<string> {
-  return db.transaction(async (tx) => {
-    const existing = await tx.query.sequences.findFirst({ where: eq(sequences.name, seqName) })
-    const val = (existing?.value ?? 0) + 1
-    if (existing) {
-      await tx.update(sequences).set({ value: val }).where(eq(sequences.name, seqName))
-    } else {
-      await tx.insert(sequences).values({ name: seqName, value: val })
-    }
-    return `${prefix}-${String(val).padStart(3, "0")}`
-  })
-}
 
 export async function deleteConsultation(id: string) {
   await db.delete(consultations).where(eq(consultations.id, id))
@@ -81,7 +70,7 @@ export async function updateConsultation(
 
 export async function createConsultation(data: ConsultationFormData) {
   const v = consultationSchema.parse(data)
-  const ref = await nextRef("consultations", "C")
+  const ref = await nextRef("C", "consultations")
   await db.insert(consultations).values({
     ref,
     patientId: v.patientId,

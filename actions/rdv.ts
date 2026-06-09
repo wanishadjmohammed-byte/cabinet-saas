@@ -2,7 +2,8 @@
 
 import { db } from "@/lib/db"
 import { rendezVous, sequences, patients } from "@/lib/db/schema"
-import { eq, gte, lte, and } from "drizzle-orm"
+import { eq, gte, lte, and, sql } from "drizzle-orm"
+import { nextRef } from "@/lib/db/nextRef"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -20,18 +21,6 @@ const rdvSchema = z.object({
 
 export type RdvFormData = z.infer<typeof rdvSchema>
 
-async function nextRef(): Promise<string> {
-  return db.transaction(async (tx) => {
-    const existing = await tx.query.sequences.findFirst({ where: eq(sequences.name, "rdv") })
-    const val = (existing?.value ?? 0) + 1
-    if (existing) {
-      await tx.update(sequences).set({ value: val }).where(eq(sequences.name, "rdv"))
-    } else {
-      await tx.insert(sequences).values({ name: "rdv", value: val })
-    }
-    return `RDV-${String(val).padStart(3, "0")}`
-  })
-}
 
 export async function getRdv(filter?: { from?: string; to?: string }) {
   try {
@@ -54,7 +43,7 @@ export async function getRdv(filter?: { from?: string; to?: string }) {
 
 export async function createRdv(data: RdvFormData) {
   const v = rdvSchema.parse(data)
-  const ref = await nextRef()
+  const ref = await nextRef("RDV", "rdv")
   await db.insert(rendezVous).values({
     ref,
     date: v.date,
@@ -103,14 +92,15 @@ export async function createPatientAndLinkToRdv(
   data: { nom: string; prenom: string; telephone: string; sexe?: "H" | "F" | null; dateNaissance?: string | null; pathologie?: string | null }
 ) {
   return db.transaction(async (tx) => {
-    const existing = await tx.query.sequences.findFirst({ where: eq(sequences.name, "patients") })
-    const val = (existing?.value ?? 0) + 1
-    if (existing) {
-      await tx.update(sequences).set({ value: val }).where(eq(sequences.name, "patients"))
-    } else {
-      await tx.insert(sequences).values({ name: "patients", value: val })
-    }
-    const ref = `PAT-${String(val).padStart(3, "0")}`
+    const [seq] = await tx
+      .insert(sequences)
+      .values({ name: "patients", value: 1 })
+      .onConflictDoUpdate({
+        target: sequences.name,
+        set: { value: sql`${sequences.value} + 1` },
+      })
+      .returning({ value: sequences.value })
+    const ref = `PAT-${String(seq.value).padStart(3, "0")}`
 
     const [newPatient] = await tx.insert(patients).values({
       ref,
