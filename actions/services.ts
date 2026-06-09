@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { services } from "@/lib/db/schema"
 import { eq, asc } from "drizzle-orm"
+import { requireRole } from "@/lib/auth/guard"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -31,6 +32,7 @@ export async function getActiveServices() {
 }
 
 export async function createService(data: ServiceFormData) {
+  await requireRole(["admin"])
   const v = serviceSchema.parse(data)
   await db.insert(services).values({ nom: v.nom.trim(), prixStandard: v.prixStandard, notes: v.notes || null })
   revalidatePath("/services")
@@ -38,6 +40,7 @@ export async function createService(data: ServiceFormData) {
 }
 
 export async function updateService(id: string, data: ServiceFormData) {
+  await requireRole(["admin"])
   const v = serviceSchema.parse(data)
   await db.update(services).set({ nom: v.nom.trim(), prixStandard: v.prixStandard, notes: v.notes || null }).where(eq(services.id, id))
   revalidatePath("/services")
@@ -45,12 +48,14 @@ export async function updateService(id: string, data: ServiceFormData) {
 }
 
 export async function toggleService(id: string, actif: boolean) {
+  await requireRole(["admin"])
   await db.update(services).set({ actif }).where(eq(services.id, id))
   revalidatePath("/services")
   return { success: true }
 }
 
 export async function seedServices() {
+  await requireRole(["admin"])
   const defaults = [
     { nom: "Consultation", prixStandard: 2000 },
     { nom: "Consultation + Écho", prixStandard: 3000 },

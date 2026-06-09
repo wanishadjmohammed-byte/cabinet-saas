@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { patients, consultations, versements } from "@/lib/db/schema"
 import { eq, desc, ilike, or } from "drizzle-orm"
 import { nextRef } from "@/lib/db/nextRef"
+import { requireUser, requireRole, canEditMedical } from "@/lib/auth/guard"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -38,6 +39,7 @@ export async function getPatients(search?: string) {
 }
 
 export async function getPatientInfo(id: string) {
+  await requireUser()
   return db.query.patients.findFirst({ where: eq(patients.id, id) })
 }
 
@@ -80,6 +82,7 @@ export async function getPatientsWithPayment() {
 }
 
 export async function createPatient(data: PatientFormData) {
+  const me = await requireUser()
   const v = patientSchema.parse(data)
   const ref = await nextRef("PAT", "patients")
   await db.insert(patients).values({
@@ -90,7 +93,8 @@ export async function createPatient(data: PatientFormData) {
     dateNaissance: v.dateNaissance || null,
     sexe: v.sexe || null,
     pathologie: v.pathologie || null,
-    notesMedicales: v.notesMedicales || null,
+    // Medical notes are writable only by doctors/admin.
+    notesMedicales: canEditMedical(me.role) ? (v.notesMedicales || null) : null,
   })
   revalidatePath("/patients")
   revalidatePath("/suivi-paiement")
@@ -98,7 +102,9 @@ export async function createPatient(data: PatientFormData) {
 }
 
 export async function updatePatient(id: string, data: PatientFormData) {
+  const me = await requireUser()
   const v = patientSchema.parse(data)
+  const medOk = canEditMedical(me.role)
   await db.update(patients).set({
     nom: v.nom.trim(),
     prenom: v.prenom.trim(),
@@ -106,7 +112,8 @@ export async function updatePatient(id: string, data: PatientFormData) {
     dateNaissance: v.dateNaissance || null,
     sexe: v.sexe || null,
     pathologie: v.pathologie || null,
-    notesMedicales: v.notesMedicales || null,
+    // Preserve existing medical notes when a non-medical role edits the record.
+    ...(medOk ? { notesMedicales: v.notesMedicales || null } : {}),
   }).where(eq(patients.id, id))
   revalidatePath("/patients")
   revalidatePath(`/patients/${id}`)
@@ -114,6 +121,7 @@ export async function updatePatient(id: string, data: PatientFormData) {
 }
 
 export async function deletePatient(id: string) {
+  await requireRole(["admin"])
   await db.delete(patients).where(eq(patients.id, id))
   revalidatePath("/patients")
   revalidatePath("/suivi-paiement")
@@ -121,6 +129,7 @@ export async function deletePatient(id: string) {
 }
 
 export async function updateMontantDu(patientId: string, montant: number) {
+  await requireRole(["admin"])
   await db.update(patients).set({ montantDuCustom: montant }).where(eq(patients.id, patientId))
   revalidatePath("/suivi-paiement")
   return { success: true }

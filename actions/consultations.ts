@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { consultations, patients, versements, couts, rendezVous } from "@/lib/db/schema"
 import { eq, desc } from "drizzle-orm"
 import { nextRef } from "@/lib/db/nextRef"
+import { requireUser, requireRole, canEditMedical } from "@/lib/auth/guard"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -24,6 +25,7 @@ export type ConsultationFormData = z.infer<typeof consultationSchema>
 
 
 export async function deleteConsultation(id: string) {
+  await requireRole(["admin"])
   await db.delete(consultations).where(eq(consultations.id, id))
   revalidatePath("/consultations")
   revalidatePath("/")
@@ -32,6 +34,7 @@ export async function deleteConsultation(id: string) {
 
 export async function getConsultationByRdvId(rdvId: string) {
   try {
+    await requireUser()
     return db.query.consultations.findFirst({
       where: eq(consultations.rdvId, rdvId),
       with: { service: true },
@@ -57,6 +60,8 @@ export async function updateConsultation(
   id: string,
   data: { date: string; prixFinal: number; diagnostic?: string | null; ordonnance?: string | null; notesMedicales?: string | null }
 ) {
+  // Editing a consultation touches medical records (diagnostic/ordonnance/notes).
+  await requireRole(["medecin", "admin"])
   await db.update(consultations).set({
     date: data.date,
     prixFinal: data.prixFinal,
@@ -69,6 +74,9 @@ export async function updateConsultation(
 }
 
 export async function createConsultation(data: ConsultationFormData) {
+  // Reception may create the billing record; only doctors/admin may attach medical data.
+  const me = await requireUser()
+  const medOk = canEditMedical(me.role)
   const v = consultationSchema.parse(data)
   const ref = await nextRef("C", "consultations")
   await db.insert(consultations).values({
@@ -80,9 +88,9 @@ export async function createConsultation(data: ConsultationFormData) {
     medecinId: v.medecinId || null,
     date: v.date,
     rdvId: v.rdvId || null,
-    diagnostic: v.diagnostic || null,
-    ordonnance: v.ordonnance || null,
-    notesMedicales: v.notesMedicales || null,
+    diagnostic: medOk ? (v.diagnostic || null) : null,
+    ordonnance: medOk ? (v.ordonnance || null) : null,
+    notesMedicales: medOk ? (v.notesMedicales || null) : null,
   })
   revalidatePath("/consultations")
   revalidatePath("/suivi-paiement")

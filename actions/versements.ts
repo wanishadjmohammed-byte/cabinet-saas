@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { versements } from "@/lib/db/schema"
 import { eq, desc } from "drizzle-orm"
 import { nextRef } from "@/lib/db/nextRef"
+import { requireUser, requireRole } from "@/lib/auth/guard"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -32,6 +33,7 @@ export async function getVersements(limit = 100) {
 }
 
 export async function createVersement(data: VersementFormData) {
+  await requireUser()
   const v = versementSchema.parse(data)
   const ref = await nextRef("V", "versements")
   await db.insert(versements).values({ ref, ...v, notes: v.notes || null })
@@ -45,6 +47,7 @@ export async function updateVersement(
   id: string,
   data: { montant: number; mode: "baridi_mob" | "especes"; type: "acompte" | "versement" | "solde" | "total"; date: string; notes?: string | null }
 ) {
+  await requireUser()
   await db.update(versements).set({
     montant: data.montant,
     mode: data.mode,
@@ -58,6 +61,7 @@ export async function updateVersement(
 }
 
 export async function deleteVersement(id: string) {
+  await requireRole(["admin"])
   await db.delete(versements).where(eq(versements.id, id))
   revalidatePath("/versements")
   revalidatePath("/suivi-paiement")

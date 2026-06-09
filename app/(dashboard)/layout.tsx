@@ -14,7 +14,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!user) redirect("/login")
 
-  let role: "receptionniste" | "medecin" | "admin" = "admin"
+  // Fail CLOSED: default to the least-privileged role if the profile can't be read.
+  let role: "receptionniste" | "medecin" | "admin" = "receptionniste"
   let userName = user.email?.split("@")[0] ?? "Utilisateur"
 
   try {
@@ -24,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       userName = `${profile.prenom} ${profile.nom}`
     }
   } catch {
-    // DB not yet configured — fall through with defaults
+    // DB not yet configured — stay on least-privileged default
   }
 
   return (

@@ -3,6 +3,7 @@
 import { db } from "@/lib/db"
 import { couts } from "@/lib/db/schema"
 import { eq, desc, gte, lte, and } from "drizzle-orm"
+import { requireUser, requireRole } from "@/lib/auth/guard"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -39,6 +40,7 @@ export async function getCouts(filter?: { from?: string; to?: string }) {
 }
 
 export async function createCout(data: CoutFormData) {
+  await requireUser()
   const v = coutSchema.parse(data)
   await db.insert(couts).values({ ...v, notes: v.notes || null })
   revalidatePath("/couts")
@@ -48,6 +50,7 @@ export async function createCout(data: CoutFormData) {
 }
 
 export async function deleteCout(id: string) {
+  await requireRole(["admin"])
   await db.delete(couts).where(eq(couts.id, id))
   revalidatePath("/couts")
   revalidatePath("/tresorerie")

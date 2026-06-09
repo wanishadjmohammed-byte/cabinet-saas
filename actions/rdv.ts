@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { rendezVous, sequences, patients } from "@/lib/db/schema"
 import { eq, gte, lte, and, sql } from "drizzle-orm"
 import { nextRef } from "@/lib/db/nextRef"
+import { requireUser } from "@/lib/auth/guard"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -42,6 +43,7 @@ export async function getRdv(filter?: { from?: string; to?: string }) {
 }
 
 export async function createRdv(data: RdvFormData) {
+  await requireUser()
   const v = rdvSchema.parse(data)
   const ref = await nextRef("RDV", "rdv")
   await db.insert(rendezVous).values({
@@ -64,6 +66,7 @@ export async function updateRdv(id: string, data: {
   heure: string; date: string
   patientNomLibre?: string | null; telephone?: string | null; notes?: string | null
 }) {
+  await requireUser()
   await db.update(rendezVous).set({
     heure: data.heure,
     date: data.date,
@@ -76,12 +79,14 @@ export async function updateRdv(id: string, data: {
 }
 
 export async function updateRdvStatut(id: string, statut: "confirme" | "arrive" | "en_consultation" | "effectue" | "annule" | "no_show") {
+  await requireUser()
   await db.update(rendezVous).set({ statut }).where(eq(rendezVous.id, id))
   revalidatePath("/rdv")
   return { success: true }
 }
 
 export async function deleteRdv(id: string) {
+  await requireUser()
   await db.delete(rendezVous).where(eq(rendezVous.id, id))
   revalidatePath("/rdv")
   return { success: true }
@@ -91,6 +96,7 @@ export async function createPatientAndLinkToRdv(
   rdvId: string,
   data: { nom: string; prenom: string; telephone: string; sexe?: "H" | "F" | null; dateNaissance?: string | null; pathologie?: string | null }
 ) {
+  await requireUser()
   return db.transaction(async (tx) => {
     const [seq] = await tx
       .insert(sequences)
