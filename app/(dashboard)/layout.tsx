@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { db } from "@/lib/db"
 import { profiles } from "@/lib/db/schema"
 import { eq } from "drizzle-orm"
-import { Sidebar } from "@/components/layout/sidebar"
+import { DashboardShell } from "@/components/layout/dashboard-shell"
 import { Toaster } from "@/components/ui/sonner"
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -29,12 +29,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar role={role} userName={userName} />
-      <main className="flex-1 ml-56 overflow-y-auto bg-background">
-        <div className="min-h-full p-6 max-w-[1200px]">{children}</div>
-      </main>
+    <>
+      <DashboardShell role={role} userName={userName}>
+        {children}
+      </DashboardShell>
       <Toaster position="top-right" richColors />
-    </div>
+    </>
   )
 }

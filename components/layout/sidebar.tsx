@@ -125,9 +125,13 @@ const ROLE_LABELS: Record<Role, string> = {
 interface SidebarProps {
   role: Role
   userName: string
+  /** Whether the drawer is open on mobile (ignored on md+ where it's always visible). */
+  mobileOpen?: boolean
+  /** Called when a nav item is tapped — used to close the drawer on mobile. */
+  onNavigate?: () => void
 }
 
-export function Sidebar({ role, userName }: SidebarProps) {
+export function Sidebar({ role, userName, mobileOpen = false, onNavigate }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -147,7 +151,10 @@ export function Sidebar({ role, userName }: SidebarProps) {
 
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-40 flex w-56 flex-col"
+      className={cn(
+        "fixed inset-y-0 left-0 z-50 flex w-56 flex-col transition-transform duration-200 ease-out md:translate-x-0",
+        mobileOpen ? "translate-x-0" : "-translate-x-full"
+      )}
       style={{ background: "#111111" }}
     >
       {/* Logo */}
@@ -194,6 +201,7 @@ export function Sidebar({ role, userName }: SidebarProps) {
                     <Link
                       key={item.href}
                       href={item.href}
+                      onClick={onNavigate}
                       className={cn(
                         "flex items-center gap-2.5 px-2 py-2 rounded-md text-xs font-medium transition-colors group",
                         isActive
