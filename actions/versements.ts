@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db"
 import { versements } from "@/lib/db/schema"
-import { desc } from "drizzle-orm"
+import { eq, desc } from "drizzle-orm"
 import { nextRef } from "@/lib/db/nextRef"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
