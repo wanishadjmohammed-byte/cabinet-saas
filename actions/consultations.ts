@@ -79,7 +79,7 @@ export async function createConsultation(data: ConsultationFormData) {
   const medOk = canEditMedical(me.role)
   const v = consultationSchema.parse(data)
   const ref = await nextRef("C", "consultations")
-  await db.insert(consultations).values({
+  const [created] = await db.insert(consultations).values({
     ref,
     patientId: v.patientId,
     serviceId: v.serviceId || null,
@@ -91,11 +91,21 @@ export async function createConsultation(data: ConsultationFormData) {
     diagnostic: medOk ? (v.diagnostic || null) : null,
     ordonnance: medOk ? (v.ordonnance || null) : null,
     notesMedicales: medOk ? (v.notesMedicales || null) : null,
-  })
+  }).returning({ id: consultations.id })
   revalidatePath("/consultations")
   revalidatePath("/suivi-paiement")
   revalidatePath("/")
-  return { success: true }
+  // The id lets the caller open the printable ordonnance straight after saving.
+  return { success: true, id: created.id }
+}
+
+/** Consultation + patient, used by the printable ordonnance. */
+export async function getConsultationForPrint(id: string) {
+  await requireUser()
+  return db.query.consultations.findFirst({
+    where: eq(consultations.id, id),
+    with: { patient: true, service: true, medecin: true },
+  })
 }
 
 export async function getDashboardStats() {

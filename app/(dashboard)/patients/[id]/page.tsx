@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatCurrency, formatDate, calcAge } from "@/lib/utils"
 import Link from "next/link"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Printer } from "lucide-react"
 
 export default async function PatientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -89,7 +89,18 @@ export default async function PatientDetailPage({ params }: { params: Promise<{ 
                     <p className="text-xs text-muted-foreground">{formatDate(c.date)} · {c.ref}</p>
                     {c.diagnostic && <p className="text-xs text-muted-foreground mt-1 italic">{c.diagnostic}</p>}
                   </div>
-                  <span className="text-sm font-semibold shrink-0">{formatCurrency(c.prixFinal)}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-sm font-semibold">{formatCurrency(c.prixFinal)}</span>
+                    <a
+                      href={`/print/ordonnance/${c.id}`}
+                      target="_blank"
+                      rel="noopener"
+                      title="Imprimer l'ordonnance"
+                      className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>

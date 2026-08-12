@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { createConsultation, updateConsultation, deleteConsultation, type ConsultationFormData } from "@/actions/consultations"
 import { Button } from "@/components/ui/button"
@@ -11,9 +11,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { SheetPreview } from "@/components/print/sheet-preview"
+import { ReportEditor } from "@/components/print/report-editor"
+import { PdfButton } from "@/components/print/pdf-button"
+import { nomFichierSur } from "@/lib/pdf"
+import { OrdonnanceSheet } from "@/components/print/documents/ordonnance-sheet"
 import { formatCurrency, formatDate, today, calcAge } from "@/lib/utils"
-import { Stethoscope, Pencil, Trash2 } from "lucide-react"
+import { Stethoscope, Pencil, Trash2, Printer, Eye } from "lucide-react"
 import { toast } from "sonner"
+
+/** Ouvre l'ordonnance A5 imprimable de la consultation dans un nouvel onglet. */
+function openOrdonnance(id: string) {
+  window.open(`/print/ordonnance/${id}`, "_blank", "noopener")
+}
 
 type Patient = { id: string; prenom: string; nom: string; telephone: string; dateNaissance: string | null }
 type Service = { id: string; nom: string; prixStandard: number }
@@ -32,6 +42,8 @@ export function ConsultationsClient({ consultations, patients, services }: {
   const [patientSearch, setPatientSearch] = useState("")
   const [selected, setSelected] = useState<Consultation | null>(null)
   const [editMode, setEditMode] = useState(false)
+  const [showSheet, setShowSheet] = useState(false)
+  const sheetRef = useRef<HTMLDivElement>(null)
   const [editForm, setEditForm] = useState({ date: "", prixFinal: 0, diagnostic: "", ordonnance: "", notesMedicales: "" })
   const [editPending, startEditTransition] = useTransition()
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -53,16 +65,21 @@ export function ConsultationsClient({ consultations, patients, services }: {
   function openDetail(c: Consultation) {
     setSelected(c)
     setEditMode(false)
+    setShowSheet(false)
   }
 
-  function startEdit() {
-    if (!selected) return
+  /** Ouvre la consultation directement en modification (bouton de la liste ou du détail). */
+  function startEdit(consultation?: Consultation) {
+    const c = consultation ?? selected
+    if (!c) return
+    setSelected(c)
+    setShowSheet(false)
     setEditForm({
-      date: selected.date,
-      prixFinal: selected.prixFinal,
-      diagnostic: selected.diagnostic ?? "",
-      ordonnance: selected.ordonnance ?? "",
-      notesMedicales: selected.notesMedicales ?? "",
+      date: c.date,
+      prixFinal: c.prixFinal,
+      diagnostic: c.diagnostic ?? "",
+      ordonnance: c.ordonnance ?? "",
+      notesMedicales: c.notesMedicales ?? "",
     })
     setEditMode(true)
   }
@@ -116,8 +133,10 @@ export function ConsultationsClient({ consultations, patients, services }: {
     if (!form.patientId) { toast.error("Sélectionnez un patient"); return }
     startTransition(async () => {
       try {
-        await createConsultation(form)
-        toast.success("Consultation enregistrée")
+        const res = await createConsultation(form)
+        toast.success("Consultation enregistrée", {
+          action: { label: "Imprimer l'ordonnance", onClick: () => openOrdonnance(res.id) },
+        })
         setForm({ patientId: "", serviceId: null, prixStandard: 0, prixFinal: 0, medecinId: null, date: today(), rdvId: null, diagnostic: null, ordonnance: null, notesMedicales: null })
         setPatientSearch("")
         router.refresh()
@@ -211,8 +230,12 @@ export function ConsultationsClient({ consultations, patients, services }: {
               </div>
               <div className="space-y-1.5">
                 <Label>Ordonnance</Label>
-                <Textarea rows={5} placeholder="Médicaments, posologies, durée du traitement…"
-                  value={form.ordonnance ?? ""} onChange={(e) => setForm((f) => ({ ...f, ordonnance: e.target.value || null }))} />
+                <ReportEditor
+                  rows={7}
+                  placeholder={"- Médicament — posologie — durée"}
+                  value={form.ordonnance ?? ""}
+                  onChange={(v) => setForm((f) => ({ ...f, ordonnance: v || null }))}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Notes complémentaires</Label>
@@ -262,10 +285,20 @@ export function ConsultationsClient({ consultations, patients, services }: {
                             <button onClick={() => setDeletingId(null)} className="text-xs px-2 py-1 rounded border border-border hover:bg-muted transition-colors">Non</button>
                           </div>
                         ) : (
-                          <button onClick={(e) => { e.stopPropagation(); setDeletingId(c.id) }}
-                            className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => startEdit(c)} title="Modifier l'ordonnance"
+                              className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => openOrdonnance(c.id)} title="Imprimer l'ordonnance"
+                              className="p-1.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => setDeletingId(c.id)} title="Supprimer"
+                              className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
@@ -279,7 +312,8 @@ export function ConsultationsClient({ consultations, patients, services }: {
 
       {/* Consultation detail / edit dialog */}
       <Dialog open={!!selected} onOpenChange={(open) => { if (!open) { setSelected(null); setEditMode(false) } }}>
-        <DialogContent className="max-w-lg">
+        {/* L'aperçu A5 a besoin de place : la fenêtre s'élargit en modification. */}
+        <DialogContent className={editMode ? "max-w-4xl max-h-[92vh] overflow-y-auto" : "max-w-lg"}>
           {!editMode ? (
             <>
               <DialogHeader>
@@ -290,14 +324,48 @@ export function ConsultationsClient({ consultations, patients, services }: {
                   {selected && formatDate(selected.date)} · {selected?.service?.nom ?? "—"} · {formatCurrency(selected?.prixFinal ?? 0)}
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 pb-2">
-                <DetailField label="Diagnostic / Cas" value={selected?.diagnostic} />
-                <DetailField label="Ordonnance" value={selected?.ordonnance} />
-                <DetailField label="Notes complémentaires" value={selected?.notesMedicales} />
-              </div>
-              <div className="flex justify-end pt-1">
-                <Button size="sm" variant="outline" onClick={startEdit}>
+              {showSheet && selected ? (
+                <div ref={sheetRef} className="rounded-lg bg-neutral-200 p-3">
+                  <SheetPreview>
+                    <OrdonnanceSheet
+                      data={{
+                        date: selected.date,
+                        patientNom: selected.patient?.nom ?? "",
+                        patientPrenom: selected.patient?.prenom ?? "",
+                        age: calcAge(selected.patient?.dateNaissance),
+                        ordonnance: selected.ordonnance,
+                      }}
+                    />
+                  </SheetPreview>
+                </div>
+              ) : (
+                <div className="space-y-4 pb-2">
+                  <DetailField label="Diagnostic / Cas" value={selected?.diagnostic} />
+                  <DetailField label="Ordonnance" value={selected?.ordonnance} />
+                  <DetailField label="Notes complémentaires" value={selected?.notesMedicales} />
+                </div>
+              )}
+              <div className="flex flex-wrap justify-end gap-2 pt-1">
+                <Button size="sm" variant="outline" onClick={() => setShowSheet((v) => !v)}>
+                  <Eye className="w-3.5 h-3.5 mr-1.5" />
+                  {showSheet ? "Voir les détails" : "Aperçu ordonnance"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => startEdit()}>
                   <Pencil className="w-3.5 h-3.5 mr-1.5" />Modifier
+                </Button>
+                {showSheet && selected && (
+                  <PdfButton
+                    getSheet={() => sheetRef.current?.querySelector<HTMLElement>(".sheet") ?? null}
+                    nomFichier={nomFichierSur(
+                      "Ordonnance",
+                      selected.patient?.nom,
+                      selected.patient?.prenom,
+                      selected.date
+                    )}
+                  />
+                )}
+                <Button size="sm" onClick={() => selected && openOrdonnance(selected.id)}>
+                  <Printer className="w-3.5 h-3.5 mr-1.5" />Imprimer
                 </Button>
               </div>
             </>
@@ -307,7 +375,8 @@ export function ConsultationsClient({ consultations, patients, services }: {
                 <DialogTitle>Modifier — {selected?.ref}</DialogTitle>
                 <DialogDescription>{selected?.patient ? `${selected.patient.prenom} ${selected.patient.nom}` : ""}</DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleEditSubmit} className="space-y-4 mt-1">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-1">
+              <form onSubmit={handleEditSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label>Date</Label>
@@ -324,7 +393,12 @@ export function ConsultationsClient({ consultations, patients, services }: {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Ordonnance</Label>
-                  <Textarea rows={4} value={editForm.ordonnance} onChange={(e) => setEditForm((f) => ({ ...f, ordonnance: e.target.value }))} />
+                  <ReportEditor
+                    rows={7}
+                    placeholder={"- Médicament — posologie — durée"}
+                    value={editForm.ordonnance}
+                    onChange={(v) => setEditForm((f) => ({ ...f, ordonnance: v }))}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Notes complémentaires</Label>
@@ -335,6 +409,27 @@ export function ConsultationsClient({ consultations, patients, services }: {
                   <Button type="submit" disabled={editPending}>{editPending ? "Enregistrement…" : "Sauvegarder"}</Button>
                 </div>
               </form>
+
+              {/* Aperçu de l'ordonnance, mis à jour à la frappe */}
+              <div className="lg:sticky lg:top-0 lg:self-start">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Aperçu de l&apos;ordonnance
+                </p>
+                <div className="rounded-lg bg-neutral-200 p-3">
+                  <SheetPreview>
+                    <OrdonnanceSheet
+                      data={{
+                        date: editForm.date,
+                        patientNom: selected?.patient?.nom ?? "",
+                        patientPrenom: selected?.patient?.prenom ?? "",
+                        age: calcAge(selected?.patient?.dateNaissance),
+                        ordonnance: editForm.ordonnance,
+                      }}
+                    />
+                  </SheetPreview>
+                </div>
+              </div>
+              </div>
             </>
           )}
         </DialogContent>

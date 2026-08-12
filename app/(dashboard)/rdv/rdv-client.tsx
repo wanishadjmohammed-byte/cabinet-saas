@@ -7,19 +7,25 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { CalendarDays, Plus, Clock, LayoutGrid, List, ChevronLeft, ChevronRight } from "lucide-react"
+import {
+  CalendarDays, Plus, Clock, LayoutGrid, List, CalendarRange,
+  ChevronLeft, ChevronRight, UserCheck, UserPlus, ArrowLeft, Check,
+} from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 import { KanbanBoard } from "@/components/rdv/kanban-board"
+import { WeekTimeline } from "@/components/rdv/week-timeline"
+
+type RdvView = "kanban" | "liste" | "semaine"
 
 type RdvRow = {
   id: string; ref: string; date: string; heure: string; statut: string
   patientNomLibre: string | null; telephone: string | null; age: number | null
   notes: string | null
-  patient: { id: string; prenom: string; nom: string; telephone: string } | null
+  patient: { id: string; prenom: string; nom: string; telephone: string; dateNaissance: string | null } | null
   medecin: { nom: string; prenom: string } | null
 }
 type Patient = { id: string; prenom: string; nom: string; telephone: string; dateNaissance: string | null }
@@ -35,6 +41,9 @@ const STATUT_VARIANTS = {
   confirme: "confirme", arrive: "confirme", en_consultation: "confirme",
   effectue: "effectue", annule: "annule", no_show: "no_show",
 } as const
+
+/** Étape du formulaire de création : on demande d'abord de quel patient il s'agit. */
+type Etape = "choix" | "existant" | "nouveau"
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -58,14 +67,19 @@ function fmtLabel(dateStr: string): string {
   return new Date(dateStr + "T12:00:00").toLocaleDateString("fr-DZ", { weekday: "short", day: "numeric", month: "short" })
 }
 
+const EMPTY_FORM = (date: string): RdvFormData => ({
+  date, heure: "09:00", statut: "confirme",
+  patientId: null, patientNomLibre: null, telephone: null, age: null, medecinId: null, notes: null,
+})
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function RdvClient({ initialRdv, patients, services, medecins, today, from, to }: {
+export function RdvClient({ initialRdv, patients, services, medecins, today, from, to, view }: {
   initialRdv: RdvRow[]; patients: Patient[]; services: Service[]; medecins: Medecin[]
-  today: string; from: string; to: string
+  today: string; from: string; to: string; view: RdvView
 }) {
   const [open, setOpen] = useState(false)
-  const [view, setView] = useState<"liste" | "kanban">("kanban")
+  const [etape, setEtape] = useState<Etape>("choix")
   const [isPending, startTransition] = useTransition()
   const [patientSearch, setPatientSearch] = useState("")
   const [customOpen, setCustomOpen] = useState(false)
@@ -73,22 +87,34 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
   const [customTo, setCustomTo] = useState(to)
   const router = useRouter()
 
-  const [form, setForm] = useState<RdvFormData>({
-    date: today, heure: "09:00", statut: "confirme",
-    patientId: null, patientNomLibre: null, telephone: null, age: null, medecinId: null, notes: null,
-  })
+  const [form, setForm] = useState<RdvFormData>(EMPTY_FORM(today))
 
-  // ── Navigation helper ──────────────────────────────────────────────────────
+  // ── Navigation ─────────────────────────────────────────────────────────────
 
-  function navigate(newFrom: string, newTo: string) {
-    if (newFrom === today && newTo === today) {
-      router.push("/rdv")
-    } else {
-      router.push(`/rdv?from=${newFrom}&to=${newTo}`)
+  function navigate(newFrom: string, newTo: string, newView: RdvView = view) {
+    const params = new URLSearchParams()
+    if (newView !== "kanban") params.set("view", newView)
+    if (newFrom !== today || newTo !== today) {
+      params.set("from", newFrom)
+      // En semaine, la plage est dérivée côté serveur à partir de `from`.
+      if (newView !== "semaine") params.set("to", newTo)
     }
+    const qs = params.toString()
+    router.push(qs ? `/rdv?${qs}` : "/rdv")
   }
 
-  // ── Range presets (for list view) ──────────────────────────────────────────
+  function changeView(v: RdvView) {
+    if (v === view) return
+    if (v === "semaine") return navigate(from, from, v)
+    if (view === "semaine") {
+      // On retombe sur aujourd'hui si la semaine affichée le contient.
+      const ancre = today >= from && today <= to ? today : from
+      return navigate(ancre, ancre, v)
+    }
+    navigate(from, to, v)
+  }
+
+  // ── Plages prédéfinies (vue liste) ─────────────────────────────────────────
 
   const PRESETS = [
     { label: "Aujourd'hui",  f: today,              t: today },
@@ -101,7 +127,7 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
   const activePreset = PRESETS.find((p) => p.f === from && p.t === to)
   const isCustomRange = !activePreset
 
-  // ── Handlers ───────────────────────────────────────────────────────────────
+  // ── Données dérivées ───────────────────────────────────────────────────────
 
   const filteredPats = patients.filter((p) => {
     const q = patientSearch.toLowerCase()
@@ -114,8 +140,19 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
     return acc
   }, {})
 
-  // Kanban always shows one day (the 'from' date)
+  // Le kanban n'affiche qu'un jour (la date 'from')
   const kanbanRdvs = initialRdv.filter((r) => r.date === from)
+
+  const patientChoisi = patients.find((p) => p.id === form.patientId) ?? null
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+
+  function openDialog() {
+    setEtape("choix")
+    setForm(EMPTY_FORM(view === "kanban" ? from : today))
+    setPatientSearch("")
+    setOpen(true)
+  }
 
   function selectPatient(p: Patient) {
     setForm((f) => ({ ...f, patientId: p.id, telephone: p.telephone, patientNomLibre: null }))
@@ -132,13 +169,21 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (etape === "existant" && !form.patientId) {
+      toast.error("Sélectionnez un patient dans la liste")
+      return
+    }
+    if (etape === "nouveau" && !form.patientNomLibre?.trim()) {
+      toast.error("Le nom du patient est requis")
+      return
+    }
     startTransition(async () => {
       try {
         await createRdv(form)
         toast.success("Rendez-vous créé")
         setOpen(false)
         setPatientSearch("")
-        setForm({ date: today, heure: "09:00", statut: "confirme", patientId: null, patientNomLibre: null, telephone: null, age: null, medecinId: null, notes: null })
+        setForm(EMPTY_FORM(today))
         router.refresh()
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : "Erreur")
@@ -149,8 +194,6 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
   const totalRdv = initialRdv.length
   const totalConfirmes = initialRdv.filter((r) => r.statut === "confirme").length
 
-  // ── Chip button style ──────────────────────────────────────────────────────
-
   function chipCls(active: boolean) {
     return `text-xs px-2.5 py-1 rounded-md border transition-colors whitespace-nowrap ${
       active
@@ -159,10 +202,16 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
     }`
   }
 
+  const VIEWS: { id: RdvView; label: string; icon: React.ElementType }[] = [
+    { id: "kanban", label: "Kanban", icon: LayoutGrid },
+    { id: "semaine", label: "Semaine", icon: CalendarRange },
+    { id: "liste", label: "Liste", icon: List },
+  ]
+
   return (
     <div className="space-y-4">
       {/* ── Top header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">Rendez-vous</h1>
           <p className="text-sm text-muted-foreground">
@@ -171,92 +220,30 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
         </div>
 
         <div className="flex items-center gap-2">
-          {/* View toggle */}
           <div className="flex items-center border border-border rounded-md overflow-hidden">
-            <button
-              onClick={() => setView("kanban")}
-              className={`px-2.5 py-1.5 flex items-center gap-1.5 text-xs transition-colors ${view === "kanban" ? "bg-foreground text-background" : "hover:bg-muted text-muted-foreground"}`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />Kanban
-            </button>
-            <button
-              onClick={() => setView("liste")}
-              className={`px-2.5 py-1.5 flex items-center gap-1.5 text-xs transition-colors border-l border-border ${view === "liste" ? "bg-foreground text-background" : "hover:bg-muted text-muted-foreground"}`}
-            >
-              <List className="w-3.5 h-3.5" />Liste
-            </button>
+            {VIEWS.map((v, i) => {
+              const Icon = v.icon
+              return (
+                <button
+                  key={v.id}
+                  onClick={() => changeView(v.id)}
+                  className={`px-2.5 py-1.5 flex items-center gap-1.5 text-xs transition-colors ${
+                    i > 0 ? "border-l border-border" : ""
+                  } ${view === v.id ? "bg-foreground text-background" : "hover:bg-muted text-muted-foreground"}`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {v.label}
+                </button>
+              )
+            })}
           </div>
 
-          {/* New RDV dialog */}
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm"><Plus className="w-4 h-4" />Nouveau RDV</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Nouveau rendez-vous</DialogTitle></DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Date *</Label>
-                    <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} required />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Heure *</Label>
-                    <Input type="time" value={form.heure} onChange={(e) => setForm((f) => ({ ...f, heure: e.target.value }))} required />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Patient</Label>
-                  <div className="relative">
-                    <Input
-                      placeholder="Chercher un patient ou saisir un nom libre…"
-                      value={patientSearch}
-                      onChange={(e) => { setPatientSearch(e.target.value); setForm((f) => ({ ...f, patientId: null, patientNomLibre: e.target.value || null })) }}
-                    />
-                    {patientSearch && !form.patientId && filteredPats.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-card border border-border rounded-md shadow-lg overflow-hidden">
-                        {filteredPats.map((p) => (
-                          <button key={p.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-accent" onClick={() => selectPatient(p)}>
-                            {p.prenom} {p.nom} <span className="text-muted-foreground text-xs">· {p.telephone}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Téléphone</Label>
-                    <Input value={form.telephone ?? ""} onChange={(e) => setForm((f) => ({ ...f, telephone: e.target.value || null }))} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Statut</Label>
-                    <Select value={form.statut} onValueChange={(v) => setForm((f) => ({ ...f, statut: v as RdvFormData["statut"] }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="confirme">Confirmé</SelectItem>
-                        <SelectItem value="arrive">Arrivé</SelectItem>
-                        <SelectItem value="en_consultation">En consultation</SelectItem>
-                        <SelectItem value="effectue">Effectué</SelectItem>
-                        <SelectItem value="annule">Annulé</SelectItem>
-                        <SelectItem value="no_show">No-show</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-1">
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
-                  <Button type="submit" disabled={isPending}>{isPending ? "Enregistrement…" : "Créer"}</Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button size="sm" onClick={openDialog}><Plus className="w-4 h-4" />Nouveau RDV</Button>
         </div>
       </div>
 
-      {/* ── Date / range controls (contextual) ── */}
-      {view === "kanban" ? (
-        /* Kanban: single day with prev/next arrows */
+      {/* ── Contrôles de date, contextuels à la vue ── */}
+      {view === "kanban" && (
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => navigate(addDays(from, -1), addDays(from, -1))}
@@ -281,12 +268,41 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
               onClick={() => navigate(today, today)}
               className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 whitespace-nowrap ml-0.5"
             >
-              Aujourd'hui
+              Aujourd&apos;hui
             </button>
           )}
         </div>
-      ) : (
-        /* List: range preset chips */
+      )}
+
+      {view === "semaine" && (
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => navigate(addDays(from, -7), addDays(from, -7))}
+            className="h-8 w-8 flex items-center justify-center rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-sm font-medium whitespace-nowrap px-1">
+            {fmtLabel(from)} → {fmtLabel(to)}
+          </span>
+          <button
+            onClick={() => navigate(addDays(from, 7), addDays(from, 7))}
+            className="h-8 w-8 flex items-center justify-center rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          {!(today >= from && today <= to) && (
+            <button
+              onClick={() => navigate(today, today)}
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 whitespace-nowrap ml-0.5"
+            >
+              Cette semaine
+            </button>
+          )}
+        </div>
+      )}
+
+      {view === "liste" && (
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             {PRESETS.map((p) => (
@@ -307,7 +323,6 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
             ) : null}
           </div>
 
-          {/* Custom range inputs */}
           {customOpen && (
             <div className="flex items-center gap-2 flex-wrap">
               <Input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-8 w-36 text-sm" />
@@ -325,7 +340,7 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
         </div>
       )}
 
-      {/* ── Kanban view ── */}
+      {/* ── Vue kanban ── */}
       {view === "kanban" && (
         kanbanRdvs.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
@@ -337,7 +352,12 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
         )
       )}
 
-      {/* ── List view ── */}
+      {/* ── Vue semaine ── */}
+      {view === "semaine" && (
+        <WeekTimeline rdvs={initialRdv} weekStart={from} today={today} />
+      )}
+
+      {/* ── Vue liste ── */}
       {view === "liste" && (
         Object.keys(rdvByDate).length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
@@ -407,6 +427,189 @@ export function RdvClient({ initialRdv, patients, services, medecins, today, fro
           ))
         )
       )}
+
+      {/* ── Nouveau RDV : d'abord le type de patient, ensuite le formulaire ── */}
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {etape === "choix" && "Nouveau rendez-vous"}
+              {etape === "existant" && "Patient déjà enregistré"}
+              {etape === "nouveau" && "Nouveau patient"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {etape === "choix" ? (
+            <div className="space-y-2.5 mt-1">
+              <p className="text-sm text-muted-foreground">
+                S&apos;agit-il d&apos;un patient qui revient, ou d&apos;une première visite ?
+              </p>
+
+              <ChoixCard
+                icon={UserCheck}
+                titre="Patient existant"
+                detail="Il est déjà dans la base et revient pour une nouvelle consultation."
+                couleur="#3B82F6"
+                onClick={() => { setForm(EMPTY_FORM(view === "kanban" ? from : today)); setPatientSearch(""); setEtape("existant") }}
+              />
+              <ChoixCard
+                icon={UserPlus}
+                titre="Nouveau patient"
+                detail="Première visite. Le dossier complet sera créé à son arrivée au cabinet."
+                couleur="#10B981"
+                onClick={() => { setForm(EMPTY_FORM(view === "kanban" ? from : today)); setPatientSearch(""); setEtape("nouveau") }}
+              />
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4 mt-1">
+              <button
+                type="button"
+                onClick={() => setEtape("choix")}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Changer de type
+              </button>
+
+              {etape === "existant" ? (
+                <div className="space-y-1.5">
+                  <Label>Patient *</Label>
+                  {patientChoisi ? (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-emerald-900 truncate">
+                          {patientChoisi.prenom} {patientChoisi.nom}
+                        </p>
+                        <p className="text-xs text-emerald-700">{patientChoisi.telephone}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setForm((f) => ({ ...f, patientId: null, telephone: null })); setPatientSearch("") }}
+                        className="shrink-0 text-xs text-emerald-800 underline underline-offset-2 hover:text-emerald-900"
+                      >
+                        Changer
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Input
+                        autoFocus
+                        placeholder="Rechercher par nom ou prénom…"
+                        value={patientSearch}
+                        onChange={(e) => setPatientSearch(e.target.value)}
+                      />
+                      {patientSearch && filteredPats.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-card border border-border rounded-md shadow-lg overflow-hidden">
+                          {filteredPats.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-accent"
+                              onClick={() => selectPatient(p)}
+                            >
+                              {p.prenom} {p.nom}{" "}
+                              <span className="text-muted-foreground text-xs">· {p.telephone}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {patientSearch && filteredPats.length === 0 && (
+                        <p className="mt-1.5 text-xs text-muted-foreground">
+                          Aucun patient trouvé —{" "}
+                          <button
+                            type="button"
+                            onClick={() => { setForm((f) => ({ ...f, patientNomLibre: patientSearch })); setEtape("nouveau") }}
+                            className="underline underline-offset-2 hover:text-foreground"
+                          >
+                            l&apos;enregistrer comme nouveau patient
+                          </button>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Nom du patient *</Label>
+                    <Input
+                      autoFocus
+                      placeholder="Prénom et nom"
+                      value={form.patientNomLibre ?? ""}
+                      onChange={(e) => setForm((f) => ({ ...f, patientNomLibre: e.target.value || null }))}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Téléphone</Label>
+                    <Input
+                      value={form.telephone ?? ""}
+                      onChange={(e) => setForm((f) => ({ ...f, telephone: e.target.value || null }))}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Date *</Label>
+                  <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} required />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Heure *</Label>
+                  <Input type="time" value={form.heure} onChange={(e) => setForm((f) => ({ ...f, heure: e.target.value }))} required />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Statut</Label>
+                <Select value={form.statut} onValueChange={(v) => setForm((f) => ({ ...f, statut: v as RdvFormData["statut"] }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="confirme">Confirmé</SelectItem>
+                    <SelectItem value="arrive">Arrivé</SelectItem>
+                    <SelectItem value="en_consultation">En consultation</SelectItem>
+                    <SelectItem value="effectue">Effectué</SelectItem>
+                    <SelectItem value="annule">Annulé</SelectItem>
+                    <SelectItem value="no_show">No-show</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
+                <Button type="submit" disabled={isPending}>{isPending ? "Enregistrement…" : "Créer"}</Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
+  )
+}
+
+function ChoixCard({
+  icon: Icon, titre, detail, couleur, onClick,
+}: {
+  icon: React.ElementType; titre: string; detail: string; couleur: string; onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:border-foreground/25 hover:bg-accent/50"
+    >
+      <span
+        className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md"
+        style={{ background: couleur + "18" }}
+      >
+        <Icon className="h-4.5 w-4.5" style={{ color: couleur, width: "1.1rem", height: "1.1rem" }} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{titre}</span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{detail}</span>
+      </span>
+      <Check className="mt-2 h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/60" />
+    </button>
   )
 }

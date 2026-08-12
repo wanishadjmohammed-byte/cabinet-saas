@@ -1,0 +1,66 @@
+/* ── Feuille imprimable ───────────────────────────────────────────────────────
+   Les classes `.sheet*` et `.watermark` vivent dans globals.css : elles servent
+   aussi aux aperçus affichés dans l'application. Ce fichier ne garde que le
+   plateau d'affichage et les règles d'impression.                            */
+
+.print-root {
+  min-height: 100vh;
+  background: #525659;
+  padding: 60px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+  }
+
+  .print-root {
+    min-height: 0;
+    padding: 0;
+    background: #fff;
+    display: block;
+  }
+
+  .sheet {
+    box-shadow: none;
+    margin: 0;
+  }
+
+  /* Une fraction de mm en moins : évite qu'un arrondi ne déborde sur une 2e page. */
+  .sheet-a5 {
+    width: 148mm;
+    height: 209.6mm;
+  }
+
+  .sheet-a4 {
+    width: 210mm;
+    height: 296.6mm;
+  }
+
+  .sheet-flow {
+    height: auto;
+    min-height: 0;
+  }
+
+  /* Ne jamais couper un titre ou une puce au milieu. */
+  .fmt-heading,
+  .fmt-subheading,
+  .fmt-bullet {
+    break-inside: avoid;
+  }
+
+  .fmt-heading,
+  .fmt-subheading {
+    break-after: avoid;
+  }
+}

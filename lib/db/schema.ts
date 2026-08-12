@@ -163,6 +163,57 @@ export const couts = pgTable("couts", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 
+// ─── Comptes rendus médicaux ──────────────────────────────────────────────────
+
+export const comptesRendus = pgTable("comptes_rendus", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ref: text("ref").notNull().unique(), // CR-001
+  date: date("date").notNull(),
+  patientId: uuid("patient_id")
+    .notNull()
+    .references(() => patients.id, { onDelete: "restrict" }),
+  consultationId: uuid("consultation_id").references(() => consultations.id, {
+    onDelete: "set null",
+  }),
+  /** Sous-titre du document — "SUIVI MEDICAL", "COMPTE RENDU OPERATOIRE"… */
+  type: text("type").notNull().default("SUIVI MEDICAL"),
+  motif: text("motif"),
+  contenu: text("contenu").notNull(),
+  medecinId: uuid("medecin_id").references(() => profiles.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+})
+
+// ─── Factures ─────────────────────────────────────────────────────────────────
+
+export const factures = pgTable("factures", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  numero: text("numero").notNull().unique(), // 000001
+  date: date("date").notNull(),
+  patientId: uuid("patient_id").references(() => patients.id, {
+    onDelete: "set null",
+  }),
+  /** Nom figé au moment de l'émission — une facture ne doit jamais changer. */
+  patientNom: text("patient_nom").notNull(),
+  patientAge: text("patient_age"),
+  patientSexe: text("patient_sexe"),
+  typeIntervention: text("type_intervention"),
+  dateIntervention: date("date_intervention"),
+  /** Taux de TVA en % appliqué à cette facture (0 = exonérée). */
+  tva: integer("tva").notNull().default(19),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+})
+
+export const factureLignes = pgTable("facture_lignes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  factureId: uuid("facture_id")
+    .notNull()
+    .references(() => factures.id, { onDelete: "cascade" }),
+  description: text("description").notNull(),
+  montant: integer("montant").notNull(),
+  ordre: integer("ordre").notNull().default(0),
+})
+
 // ─── Séquences (for generating refs like PAT-001) ─────────────────────────────
 
 export const sequences = pgTable("sequences", {
@@ -176,6 +227,38 @@ export const patientsRelations = relations(patients, ({ many }) => ({
   consultations: many(consultations),
   versements: many(versements),
   rendezVous: many(rendezVous),
+  comptesRendus: many(comptesRendus),
+  factures: many(factures),
+}))
+
+export const comptesRendusRelations = relations(comptesRendus, ({ one }) => ({
+  patient: one(patients, {
+    fields: [comptesRendus.patientId],
+    references: [patients.id],
+  }),
+  medecin: one(profiles, {
+    fields: [comptesRendus.medecinId],
+    references: [profiles.id],
+  }),
+  consultation: one(consultations, {
+    fields: [comptesRendus.consultationId],
+    references: [consultations.id],
+  }),
+}))
+
+export const facturesRelations = relations(factures, ({ one, many }) => ({
+  patient: one(patients, {
+    fields: [factures.patientId],
+    references: [patients.id],
+  }),
+  lignes: many(factureLignes),
+}))
+
+export const factureLignesRelations = relations(factureLignes, ({ one }) => ({
+  facture: one(factures, {
+    fields: [factureLignes.factureId],
+    references: [factures.id],
+  }),
 }))
 
 export const consultationsRelations = relations(consultations, ({ one }) => ({
@@ -224,9 +307,14 @@ export type RendezVous = typeof rendezVous.$inferSelect
 export type Consultation = typeof consultations.$inferSelect
 export type Versement = typeof versements.$inferSelect
 export type Cout = typeof couts.$inferSelect
+export type CompteRendu = typeof comptesRendus.$inferSelect
+export type Facture = typeof factures.$inferSelect
+export type FactureLigne = typeof factureLignes.$inferSelect
 
 export type NewPatient = typeof patients.$inferInsert
 export type NewConsultation = typeof consultations.$inferInsert
 export type NewVersement = typeof versements.$inferInsert
 export type NewRendezVous = typeof rendezVous.$inferInsert
 export type NewCout = typeof couts.$inferInsert
+export type NewCompteRendu = typeof comptesRendus.$inferInsert
+export type NewFacture = typeof factures.$inferInsert

@@ -14,6 +14,8 @@ import {
   Settings,
   LogOut,
   ChevronRight,
+  FileText,
+  Receipt,
 } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
@@ -67,11 +69,23 @@ const navigation: NavSection[] = [
         icon: Stethoscope,
         roles: ["medecin", "admin"],
       },
+      {
+        label: "Comptes rendus",
+        href: "/comptes-rendus",
+        icon: FileText,
+        roles: ["medecin", "admin"],
+      },
     ],
   },
   {
     title: "Facturation",
     items: [
+      {
+        label: "Factures",
+        href: "/factures",
+        icon: Receipt,
+        roles: ["receptionniste", "medecin", "admin"],
+      },
       {
         label: "Versements",
         href: "/versements",

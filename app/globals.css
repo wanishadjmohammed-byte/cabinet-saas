@@ -65,6 +65,137 @@
   }
 }
 
+/* ── Feuille de document ────────────────────────────────────────────────────
+   Utilisée par les pages /print/* et par les aperçus intégrés à l'application. */
+
+.sheet {
+  position: relative;
+  overflow: hidden;
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.4);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  /* Conserve fonds, filets et filigrane dans le rendu imprimé. */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.sheet-a5 {
+  width: 148mm;
+  height: 210mm;
+  padding: 10mm 11mm;
+}
+
+.sheet-a4 {
+  width: 210mm;
+  height: 297mm;
+  padding: 14mm 16mm;
+}
+
+/* Document à longueur variable (compte rendu) : la feuille s'étire et
+   l'impression déborde proprement sur plusieurs pages. */
+.sheet-flow {
+  height: auto;
+  overflow: visible;
+}
+
+.sheet-a5.sheet-flow {
+  min-height: 210mm;
+}
+
+.sheet-a4.sheet-flow {
+  min-height: 297mm;
+}
+
+/* Filigrane : le logo du cabinet, très atténué, derrière le contenu. */
+.watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 62%;
+  opacity: 0.07;
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+
+.sheet > *:not(.watermark) {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Texte mis en forme (ordonnances, comptes rendus) ───────────────────────
+   Partagé entre les feuilles imprimables et l'aperçu en direct des formulaires. */
+
+.fmt {
+  font-size: 9.5pt;
+  line-height: 1.45;
+}
+
+.fmt-heading {
+  font-weight: 700;
+  text-decoration: underline;
+  margin: 0 0 2px;
+}
+
+.fmt-subheading {
+  font-weight: 700;
+  margin: 3px 0 2px;
+}
+
+.fmt-para {
+  margin: 0 0 2px;
+  text-align: justify;
+}
+
+.fmt-bullet {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 1px;
+  padding-left: 10px;
+}
+
+.fmt-bullet-2 {
+  padding-left: 26px;
+}
+
+.fmt-dot {
+  flex: none;
+  line-height: 1.45;
+}
+
+.fmt-space {
+  height: 6px;
+}
+
+/* Corps de compte rendu en A5 : la largeur utile tombe à ~126 mm, la
+   graisse du texte doit suivre. */
+.fmt-sm .fmt {
+  font-size: 7.5pt;
+  line-height: 1.4;
+}
+
+.fmt-sm .fmt-space {
+  height: 4px;
+}
+
+/* Corps d'ordonnance : plus grand et aligné à gauche — une liste de
+   médicaments ne se justifie pas. */
+.fmt-lg .fmt {
+  font-size: 11pt;
+  line-height: 1.7;
+}
+
+.fmt-lg .fmt-para {
+  text-align: left;
+  margin-bottom: 4px;
+}
+
+.fmt-lg .fmt-space {
+  height: 10px;
+}
+
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;

@@ -8,13 +8,21 @@ import {
 import { useDroppable, useDraggable } from "@dnd-kit/core"
 import { updateRdv, updateRdvStatut, deleteRdv, createPatientAndLinkToRdv } from "@/actions/rdv"
 import { createClient } from "@/lib/supabase/client"
-import { createConsultation, getConsultationByRdvId, type ConsultationFormData } from "@/actions/consultations"
+import {
+  createConsultation, getConsultationByRdvId, updateConsultation,
+  type ConsultationFormData,
+} from "@/actions/consultations"
+import { ReportEditor } from "@/components/print/report-editor"
+import { SheetPreview } from "@/components/print/sheet-preview"
+import { OrdonnanceSheet } from "@/components/print/documents/ordonnance-sheet"
+import { calcAge } from "@/lib/utils"
 import { createVersement, type VersementFormData } from "@/actions/versements"
 import { getPatientInfo, updatePatient } from "@/actions/patients"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { Clock, Stethoscope, Trash2, User } from "lucide-react"
+import { Clock, Stethoscope, Trash2, User, Printer, Pencil } from "lucide-react"
 import { formatDate } from "@/lib/utils"
+import { statutColor } from "@/lib/rdv-status"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,7 +36,7 @@ type RdvRow = {
   id: string; ref: string; date: string; heure: string; statut: string
   patientNomLibre: string | null; telephone: string | null; age: number | null
   notes: string | null
-  patient: { id: string; prenom: string; nom: string; telephone: string } | null
+  patient: { id: string; prenom: string; nom: string; telephone: string; dateNaissance: string | null } | null
   medecin: { nom: string; prenom: string } | null
 }
 type Service = { id: string; nom: string; prixStandard: number }
@@ -49,14 +57,14 @@ const STATUT_MAP: Record<ColumnId, Statut> = {
   effectue: "effectue", dead: "annule",
 }
 
-const COLUMN_COLOR: Record<string, string> = {
-  confirme: "#3B82F6", arrive: "#F59E0B", en_consultation: "#8B5CF6",
-  effectue: "#10B981", annule: "#9CA3AF", no_show: "#9CA3AF",
-}
-
 function getColumnId(statut: string): ColumnId {
   if (statut === "annule" || statut === "no_show") return "dead"
   return statut as ColumnId
+}
+
+/** Ouvre l'ordonnance A5 imprimable de la consultation dans un nouvel onglet. */
+function openOrdonnance(consultationId: string) {
+  window.open(`/print/ordonnance/${consultationId}`, "_blank", "noopener")
 }
 
 function splitName(full: string | null): { prenom: string; nom: string } {
@@ -74,7 +82,7 @@ function CardDisplay({ rdv }: { rdv: RdvRow }) {
     ? `${rdv.patient.prenom} ${rdv.patient.nom}`
     : rdv.patientNomLibre ?? "—"
   const medecinNom = rdv.medecin ? `Dr. ${rdv.medecin.prenom} ${rdv.medecin.nom}` : null
-  const borderColor = COLUMN_COLOR[rdv.statut] ?? "#9CA3AF"
+  const borderColor = statutColor(rdv.statut).trait
 
   return (
     <div
@@ -318,7 +326,8 @@ function ConsultationModal({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="px-3 py-2 bg-muted/50 rounded-md text-sm">
         <span className="text-muted-foreground">Patient : </span>
         <span className="font-medium">{nom}</span>
@@ -355,7 +364,12 @@ function ConsultationModal({
       </div>
       <div className="space-y-1.5">
         <Label>Ordonnance</Label>
-        <Textarea rows={3} value={ordonnance} onChange={(e) => setOrdonnance(e.target.value)} placeholder="Médicaments prescrits…" />
+        <ReportEditor
+          rows={6}
+          value={ordonnance}
+          onChange={setOrdonnance}
+          placeholder={"- Médicament — posologie — durée"}
+        />
       </div>
       <div className="space-y-1.5">
         <Label>Notes médicales</Label>
@@ -366,6 +380,27 @@ function ConsultationModal({
         <Button type="submit" disabled={loading}>{loading ? "Enregistrement…" : "Créer la consultation"}</Button>
       </div>
     </form>
+
+    {/* Aperçu de l'ordonnance, mis à jour à la frappe */}
+    <div className="lg:sticky lg:top-0 lg:self-start">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+        Aperçu de l&apos;ordonnance
+      </p>
+      <div className="rounded-lg bg-neutral-200 p-3">
+        <SheetPreview>
+          <OrdonnanceSheet
+            data={{
+              date: today,
+              patientNom: rdv.patient?.nom ?? splitName(rdv.patientNomLibre).nom,
+              patientPrenom: rdv.patient?.prenom ?? splitName(rdv.patientNomLibre).prenom,
+              age: calcAge(rdv.patient?.dateNaissance) ?? rdv.age,
+              ordonnance,
+            }}
+          />
+        </SheetPreview>
+      </div>
+    </div>
+    </div>
   )
 }
 
@@ -445,7 +480,11 @@ function VersementModal({
 
 // ─── Card Detail / Edit Modal ─────────────────────────────────────────────────
 
-function CardDetailModal({ rdv, onClose, onSaved }: { rdv: RdvRow; onClose: () => void; onSaved: () => void }) {
+function CardDetailModal({ rdv, onClose, onSaved, onLarge }: {
+  rdv: RdvRow; onClose: () => void; onSaved: () => void
+  /** Prévient le parent qu'il faut élargir la boîte de dialogue (aperçu affiché). */
+  onLarge: (large: boolean) => void
+}) {
   const isRdvEditable = rdv.statut === "confirme" || (rdv.statut === "arrive" && !rdv.patient)
   const isPatientEditable = rdv.statut === "arrive" && !!rdv.patient
 
@@ -466,6 +505,48 @@ function CardDetailModal({ rdv, onClose, onSaved }: { rdv: RdvRow; onClose: () =
   const [patientNotesMed, setPatientNotesMed] = useState("")
   const [patientLoading, setPatientLoading] = useState(isPatientEditable)
   const [saving, setSaving] = useState(false)
+  /** Consultation liée au RDV — permet de rouvrir et réimprimer l'ordonnance. */
+  const [consultation, setConsultation] = useState<{
+    id: string; date: string; prixFinal: number
+    diagnostic: string | null; ordonnance: string | null; notesMedicales: string | null
+  } | null>(null)
+  const [editionOrdonnance, setEditionOrdonnance] = useState(false)
+  const [texteOrdonnance, setTexteOrdonnance] = useState("")
+
+  useEffect(() => {
+    if (rdv.statut !== "en_consultation" && rdv.statut !== "effectue") return
+    getConsultationByRdvId(rdv.id).then((c) => {
+      setConsultation(c ?? null)
+      setTexteOrdonnance(c?.ordonnance ?? "")
+    })
+  }, [rdv.id, rdv.statut])
+
+  // L'aperçu A5 a besoin de place : on élargit la fenêtre pendant l'édition.
+  useEffect(() => {
+    onLarge(editionOrdonnance)
+  }, [editionOrdonnance, onLarge])
+
+  async function enregistrerOrdonnance() {
+    if (!consultation) return
+    setSaving(true)
+    try {
+      await updateConsultation(consultation.id, {
+        date: consultation.date,
+        prixFinal: consultation.prixFinal,
+        diagnostic: consultation.diagnostic,
+        ordonnance: texteOrdonnance || null,
+        notesMedicales: consultation.notesMedicales,
+      })
+      setConsultation({ ...consultation, ordonnance: texteOrdonnance || null })
+      setEditionOrdonnance(false)
+      toast.success("Ordonnance mise à jour")
+      onSaved()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // Fetch full patient data to pre-fill all fields without overwriting
   useEffect(() => {
@@ -535,7 +616,7 @@ function CardDetailModal({ rdv, onClose, onSaved }: { rdv: RdvRow; onClose: () =
     <div className="space-y-4">
       {/* Info header */}
       <div className="flex items-center gap-2 px-1">
-        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: COLUMN_COLOR[rdv.statut] ?? "#9CA3AF" }} />
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: statutColor(rdv.statut).trait }} />
         <span className="text-xs font-mono text-muted-foreground">{rdv.ref}</span>
         <span className="text-xs text-muted-foreground">·</span>
         <span className="text-xs text-muted-foreground">{rdv.heure.slice(0, 5)} · {rdv.date}</span>
@@ -652,6 +733,58 @@ function CardDetailModal({ rdv, onClose, onSaved }: { rdv: RdvRow; onClose: () =
               <p className="text-sm whitespace-pre-wrap">{rdv.notes}</p>
             </div>
           )}
+          {consultation && (
+            editionOrdonnance ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+                <div className="space-y-2">
+                  <p className="text-xs font-medium">Ordonnance</p>
+                  <ReportEditor rows={10} value={texteOrdonnance} onChange={setTexteOrdonnance} />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => { setTexteOrdonnance(consultation.ordonnance ?? ""); setEditionOrdonnance(false) }}
+                    >
+                      Annuler
+                    </Button>
+                    <Button size="sm" onClick={enregistrerOrdonnance} disabled={saving}>
+                      {saving ? "Enregistrement…" : "Sauvegarder"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="lg:sticky lg:top-0 lg:self-start">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Aperçu de l&apos;ordonnance
+                  </p>
+                  <div className="rounded-lg bg-neutral-200 p-3">
+                    <SheetPreview>
+                      <OrdonnanceSheet
+                        data={{
+                          date: consultation.date,
+                          patientNom: rdv.patient?.nom ?? splitName(rdv.patientNomLibre).nom,
+                          patientPrenom: rdv.patient?.prenom ?? splitName(rdv.patientNomLibre).prenom,
+                          age: calcAge(rdv.patient?.dateNaissance) ?? rdv.age,
+                          ordonnance: texteOrdonnance,
+                        }}
+                      />
+                    </SheetPreview>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap justify-end gap-2 pt-2">
+                <Button size="sm" variant="outline" onClick={() => setEditionOrdonnance(true)}>
+                  <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                  Modifier l&apos;ordonnance
+                </Button>
+                <Button size="sm" onClick={() => openOrdonnance(consultation.id)}>
+                  <Printer className="w-3.5 h-3.5 mr-1.5" />
+                  Imprimer
+                </Button>
+              </div>
+            )
+          )}
         </div>
       )}
     </div>
@@ -668,6 +801,7 @@ export function KanbanBoard({
   const [rdvs, setRdvs] = useState(initialRdvs)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selectedCard, setSelectedCard] = useState<RdvRow | null>(null)
+  const [detailLarge, setDetailLarge] = useState(false)
   const [pendingArrival, setPendingArrival] = useState<RdvRow | null>(null)
   const [pendingConsultation, setPendingConsultation] = useState<RdvRow | null>(null)
   const [pendingVersement, setPendingVersement] = useState<RdvRow | null>(null)
@@ -804,9 +938,11 @@ export function KanbanBoard({
     if (!pendingConsultation) return
     setModalLoading(true)
     try {
-      await createConsultation(data)
+      const res = await createConsultation(data)
       await updateRdvStatut(pendingConsultation.id, "en_consultation")
-      toast.success("Consultation créée")
+      toast.success("Consultation créée", {
+        action: { label: "Imprimer l'ordonnance", onClick: () => openOrdonnance(res.id) },
+      })
       setPendingConsultation(null)
       router.refresh()
     } catch (err) {
@@ -866,8 +1002,11 @@ export function KanbanBoard({
       </DndContext>
 
       {/* Card detail / edit modal */}
-      <Dialog open={!!selectedCard} onOpenChange={(open) => { if (!open) setSelectedCard(null) }}>
-        <DialogContent className="max-w-md">
+      <Dialog
+        open={!!selectedCard}
+        onOpenChange={(open) => { if (!open) { setSelectedCard(null); setDetailLarge(false) } }}
+      >
+        <DialogContent className={detailLarge ? "max-w-4xl max-h-[92vh] overflow-y-auto" : "max-w-md"}>
           <DialogHeader>
             <DialogTitle>
               {selectedCard?.statut === "confirme" && "Modifier le RDV"}
@@ -878,9 +1017,11 @@ export function KanbanBoard({
           </DialogHeader>
           {selectedCard && (
             <CardDetailModal
+              key={selectedCard.id}
               rdv={selectedCard}
               onClose={() => setSelectedCard(null)}
               onSaved={() => router.refresh()}
+              onLarge={setDetailLarge}
             />
           )}
         </DialogContent>
@@ -908,7 +1049,7 @@ export function KanbanBoard({
 
       {/* Consultation modal */}
       <Dialog open={!!pendingConsultation} onOpenChange={(open) => { if (!open) handleConsultationCancel() }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0" />

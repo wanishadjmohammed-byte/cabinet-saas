@@ -15,6 +15,11 @@ export function formatCurrency(amount: number): string {
   }).format(amount) + " DA"
 }
 
+/** « 123 000.00DZD » — mise en forme des montants sur les factures. */
+export function formatDZD(montant: number): string {
+  return `${montant.toLocaleString("en-US").replace(/,/g, " ")}.00DZD`
+}
+
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "—"
   try {
