@@ -147,6 +147,12 @@
 .fmt-para {
   margin: 0 0 2px;
   text-align: justify;
+  /* L indentation et les espaces d alignement saisis sont restitues tels quels. */
+  white-space: pre-wrap;
+}
+
+.fmt-bullet-text {
+  white-space: pre-wrap;
 }
 
 .fmt-bullet {

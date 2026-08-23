@@ -27,8 +27,8 @@ export function parseBlocks(source: string): Block[] {
     const trimmed = line.trim()
 
     if (!trimmed) {
-      // Collapse runs of blank lines into a single break.
-      if (blocks[blocks.length - 1]?.kind !== "space") blocks.push({ kind: "space" })
+      // Chaque ligne vide compte : le medecin aere son ordonnance comme il le souhaite.
+      blocks.push({ kind: "space" })
       continue
     }
 
@@ -39,13 +39,13 @@ export function parseBlocks(source: string): Block[] {
 
     // Sous-puce : "-- texte", "o texte", ou une puce indentée de 2 espaces.
     if (/^--\s*/.test(trimmed) || /^o\s/.test(trimmed) || /^\s{2,}[-*•]\s/.test(line)) {
-      blocks.push({ kind: "bullet", level: 2, text: trimmed.replace(/^(--|[-*•]|o)\s*/, "") })
+      blocks.push({ kind: "bullet", level: 2, text: trimmed.replace(/^(--|[-*•]|o)[ \t]?/, "") })
       continue
     }
 
     // Puce : "- texte", "* texte", "• texte".
     if (/^[-*•]\s/.test(trimmed)) {
-      blocks.push({ kind: "bullet", level: 1, text: trimmed.replace(/^[-*•]\s*/, "") })
+      blocks.push({ kind: "bullet", level: 1, text: trimmed.replace(/^[-*•][ \t]?/, "") })
       continue
     }
 
@@ -60,7 +60,8 @@ export function parseBlocks(source: string): Block[] {
       continue
     }
 
-    blocks.push({ kind: "para", text: trimmed })
+    // Paragraphe : indentation conservee telle quelle (posologies alignees a droite).
+    blocks.push({ kind: "para", text: line })
   }
 
   return blocks
@@ -90,7 +91,7 @@ export function FormattedText({ source, color }: { source: string; color?: strin
             return (
               <p key={i} className={b.level === 1 ? "fmt-bullet" : "fmt-bullet fmt-bullet-2"}>
                 <span className="fmt-dot">{b.level === 1 ? "•" : "o"}</span>
-                <span>{b.text}</span>
+                <span className="fmt-bullet-text">{b.text}</span>
               </p>
             )
           case "space":
