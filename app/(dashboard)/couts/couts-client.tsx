@@ -11,15 +11,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { formatCurrency, formatDate, today, CATEGORIES_COUT } from "@/lib/utils"
+import type { Role } from "@/lib/auth/guard"
 import { Trash2, TrendingDown } from "lucide-react"
 import { toast } from "sonner"
 
 type Cout = { id: string; date: string; categorie: string; description: string
   montant: number; nature: string; recurrence: string }
 
-export function CoutsClient({ couts }: { couts: Cout[] }) {
+export function CoutsClient({ couts, role }: { couts: Cout[]; role: Role }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  // La suppression est réservée à l'admin côté serveur : on n'affiche pas un bouton voué à échouer.
+  const peutSupprimer = role === "admin"
   const [form, setForm] = useState<CoutFormData>({
     date: today(), categorie: "autre", description: "", montant: 0, nature: "variable", recurrence: "ponctuel", notes: null,
   })
@@ -41,10 +45,15 @@ export function CoutsClient({ couts }: { couts: Cout[] }) {
   }
 
   function handleDelete(id: string) {
+    setDeletingId(null)
     startTransition(async () => {
-      await deleteCout(id)
-      toast.success("Dépense supprimée")
-      router.refresh()
+      try {
+        await deleteCout(id)
+        toast.success("Dépense supprimée")
+        router.refresh()
+      } catch {
+        toast.error("Suppression impossible — réservée à l'administrateur")
+      }
     })
   }
 
@@ -134,9 +143,16 @@ export function CoutsClient({ couts }: { couts: Cout[] }) {
                       <TableCell><span className={`text-xs font-medium ${c.nature === "fixe" ? "text-blue-600" : "text-orange-600"}`}>{c.nature === "fixe" ? "Fixe" : "Variable"}</span></TableCell>
                       <TableCell className="text-right text-sm font-semibold">{formatCurrency(c.montant)}</TableCell>
                       <TableCell>
-                        <button onClick={() => handleDelete(c.id)} className="text-muted-foreground hover:text-red-600 transition-colors p-1">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {!peutSupprimer ? null : deletingId === c.id ? (
+                          <div className="flex items-center gap-1 justify-end">
+                            <button onClick={() => handleDelete(c.id)} className="text-xs px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600 transition-colors">Oui</button>
+                            <button onClick={() => setDeletingId(null)} className="text-xs px-2 py-1 rounded border border-border hover:bg-muted transition-colors">Non</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => setDeletingId(c.id)} title="Supprimer" className="text-muted-foreground hover:text-red-600 transition-colors p-1">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))

@@ -1,7 +1,7 @@
 "use server"
 
 import { db } from "@/lib/db"
-import { couts } from "@/lib/db/schema"
+import { couts, versements } from "@/lib/db/schema"
 import { eq, desc, gte, lte, and } from "drizzle-orm"
 import { requireUser, requireRole } from "@/lib/auth/guard"
 import { revalidatePath } from "next/cache"
@@ -55,6 +55,52 @@ export async function deleteCout(id: string) {
   revalidatePath("/couts")
   revalidatePath("/tresorerie")
   return { success: true }
+}
+
+export type StatJour = {
+  date: string
+  encaisse: number
+  depenses: number
+  net: number
+}
+
+/**
+ * Net encaissé jour par jour : versements du jour moins dépenses du jour.
+ * La plage est filtrée en SQL, pas en mémoire — cette vue est consultée souvent.
+ */
+export async function getStatsJournalieres(filter?: {
+  from?: string
+  to?: string
+}): Promise<StatJour[]> {
+  try {
+    const bornes = filter?.from && filter?.to
+    const [tousVersements, toutesDepenses] = await Promise.all([
+      db.query.versements.findMany({
+        where: bornes
+          ? and(gte(versements.date, filter!.from!), lte(versements.date, filter!.to!))
+          : undefined,
+      }),
+      db.query.couts.findMany({
+        where: bornes
+          ? and(gte(couts.date, filter!.from!), lte(couts.date, filter!.to!))
+          : undefined,
+      }),
+    ])
+
+    const jours: Record<string, { encaisse: number; depenses: number }> = {}
+    for (const v of tousVersements) {
+      ;(jours[v.date] ??= { encaisse: 0, depenses: 0 }).encaisse += v.montant
+    }
+    for (const c of toutesDepenses) {
+      ;(jours[c.date] ??= { encaisse: 0, depenses: 0 }).depenses += c.montant
+    }
+
+    return Object.entries(jours)
+      .map(([date, d]) => ({ date, ...d, net: d.encaisse - d.depenses }))
+      .sort((a, b) => b.date.localeCompare(a.date))
+  } catch {
+    return []
+  }
 }
 
 export async function getTresorerie() {

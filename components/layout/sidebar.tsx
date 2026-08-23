@@ -16,6 +16,7 @@ import {
   ChevronRight,
   FileText,
   Receipt,
+  Wallet,
 } from "lucide-react"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
@@ -107,12 +108,18 @@ const navigation: NavSection[] = [
         label: "Coûts",
         href: "/couts",
         icon: TrendingDown,
-        roles: ["admin"],
+        roles: ["receptionniste", "admin"],
+      },
+      {
+        label: "Statistiques",
+        href: "/statistiques",
+        icon: BarChart3,
+        roles: ["receptionniste", "admin"],
       },
       {
         label: "Trésorerie",
         href: "/tresorerie",
-        icon: BarChart3,
+        icon: Wallet,
         roles: ["admin"],
       },
     ],
