@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatCurrency } from "@/lib/utils"
 import { Search, ClipboardList } from "lucide-react"
+import type { Role } from "@/lib/auth/guard"
 
 type PatientRow = {
   id: string; prenom: string; nom: string; telephone: string
@@ -16,9 +17,12 @@ type PatientRow = {
 
 const STATUT_LABELS = { paye: "Payé", partiel: "Partiel", impaye: "Impayé" }
 
-export function SuiviClient({ patients }: { patients: PatientRow[] }) {
+export function SuiviClient({ patients, role }: { patients: PatientRow[]; role: Role }) {
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState("all")
+  // Les cumuls du cabinet ne regardent pas l accueil : elle voit le detail
+  // patient par patient, dont elle a besoin pour encaisser, mais pas les totaux.
+  const peutVoirTotaux = role !== "receptionniste"
 
   const filtered = patients.filter((p) => {
     const q = search.toLowerCase()
@@ -41,6 +45,7 @@ export function SuiviClient({ patients }: { patients: PatientRow[] }) {
       </div>
 
       {/* Summary bands */}
+      {peutVoirTotaux && (
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "Total dû", value: totals.du, color: "text-foreground" },
@@ -53,6 +58,7 @@ export function SuiviClient({ patients }: { patients: PatientRow[] }) {
           </div>
         ))}
       </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-3">

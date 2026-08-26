@@ -15,6 +15,7 @@ import {
   LogOut,
   ChevronRight,
   FileText,
+  FileCheck,
   Receipt,
   Wallet,
 } from "lucide-react"
@@ -74,6 +75,12 @@ const navigation: NavSection[] = [
         label: "Comptes rendus",
         href: "/comptes-rendus",
         icon: FileText,
+        roles: ["medecin", "admin"],
+      },
+      {
+        label: "Arrêts de travail",
+        href: "/certificats",
+        icon: FileCheck,
         roles: ["medecin", "admin"],
       },
     ],

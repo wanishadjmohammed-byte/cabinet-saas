@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatCurrency } from "@/lib/utils"
 import type { StatJour } from "@/actions/couts"
 import { TrendingUp, TrendingDown, Wallet, BarChart3 } from "lucide-react"
+import type { Role } from "@/lib/auth/guard"
 
 function addDays(dateStr: string, n: number): string {
   const d = new Date(dateStr + "T12:00:00")
@@ -30,13 +31,17 @@ export function StatistiquesClient({
   today,
   from,
   to,
+  role,
 }: {
   stats: StatJour[]
   today: string
   from: string
   to: string
+  role: Role
 }) {
   const router = useRouter()
+  // L accueil s arrete au net du jour : ni historique ni cumuls du cabinet.
+  const voitHistorique = role !== "receptionniste"
 
   function navigate(newFrom: string, newTo: string) {
     router.push(`/statistiques?from=${newFrom}&to=${newTo}`)
@@ -65,7 +70,9 @@ export function StatistiquesClient({
     <div className="space-y-5">
       <div>
         <h1 className="text-lg font-semibold">Statistiques</h1>
-        <p className="text-sm text-muted-foreground">Net encaissé jour par jour</p>
+        <p className="text-sm text-muted-foreground">
+          {voitHistorique ? "Net encaissé jour par jour" : "Journée en cours"}
+        </p>
       </div>
 
       {/* ── Aujourd'hui ── */}
@@ -91,6 +98,8 @@ export function StatistiquesClient({
         />
       </div>
 
+      {!voitHistorique ? null : (
+      <>
       {/* ── Plage ── */}
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -215,6 +224,8 @@ export function StatistiquesClient({
           </TableBody>
         </Table>
       </div>
+      </>
+      )}
     </div>
   )
 }

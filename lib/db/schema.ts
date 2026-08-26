@@ -39,6 +39,12 @@ export const recurrenceCoutEnum = pgEnum("recurrence_cout", [
   "mensuel",
   "ponctuel",
 ])
+export const natureCertificatEnum = pgEnum("nature_certificat", [
+  "arret",
+  "prolongation",
+  "reprise",
+])
+
 export const categorieCoutEnum = pgEnum("categorie_cout", [
   "salaires",
   "livraison",
@@ -183,6 +189,27 @@ export const comptesRendus = pgTable("comptes_rendus", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 
+// ─── Certificats d'arrêt de travail ───────────────────────────────────────────
+
+export const certificats = pgTable("certificats", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ref: text("ref").notNull().unique(), // CERT-001
+  /** Date de délivrance imprimée sur la feuille. */
+  date: date("date").notNull(),
+  patientId: uuid("patient_id")
+    .notNull()
+    .references(() => patients.id, { onDelete: "restrict" }),
+  nature: natureCertificatEnum("nature").notNull(),
+  /** Arrêt et prolongation : durée et bornes. Nuls pour une reprise. */
+  nombreJours: integer("nombre_jours"),
+  dateDebut: date("date_debut"),
+  dateFin: date("date_fin"),
+  /** Reprise uniquement. */
+  dateReprise: date("date_reprise"),
+  medecinId: uuid("medecin_id").references(() => profiles.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+})
+
 // ─── Factures ─────────────────────────────────────────────────────────────────
 
 export const factures = pgTable("factures", {
@@ -229,6 +256,7 @@ export const patientsRelations = relations(patients, ({ many }) => ({
   rendezVous: many(rendezVous),
   comptesRendus: many(comptesRendus),
   factures: many(factures),
+  certificats: many(certificats),
 }))
 
 export const comptesRendusRelations = relations(comptesRendus, ({ one }) => ({
@@ -243,6 +271,17 @@ export const comptesRendusRelations = relations(comptesRendus, ({ one }) => ({
   consultation: one(consultations, {
     fields: [comptesRendus.consultationId],
     references: [consultations.id],
+  }),
+}))
+
+export const certificatsRelations = relations(certificats, ({ one }) => ({
+  patient: one(patients, {
+    fields: [certificats.patientId],
+    references: [patients.id],
+  }),
+  medecin: one(profiles, {
+    fields: [certificats.medecinId],
+    references: [profiles.id],
   }),
 }))
 
@@ -308,6 +347,7 @@ export type Consultation = typeof consultations.$inferSelect
 export type Versement = typeof versements.$inferSelect
 export type Cout = typeof couts.$inferSelect
 export type CompteRendu = typeof comptesRendus.$inferSelect
+export type Certificat = typeof certificats.$inferSelect
 export type Facture = typeof factures.$inferSelect
 export type FactureLigne = typeof factureLignes.$inferSelect
 
@@ -317,4 +357,5 @@ export type NewVersement = typeof versements.$inferInsert
 export type NewRendezVous = typeof rendezVous.$inferInsert
 export type NewCout = typeof couts.$inferInsert
 export type NewCompteRendu = typeof comptesRendus.$inferInsert
+export type NewCertificat = typeof certificats.$inferInsert
 export type NewFacture = typeof factures.$inferInsert
