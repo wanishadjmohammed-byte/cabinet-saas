@@ -62,6 +62,11 @@ function openOrdonnance(id: string) {
   window.open(`/print/ordonnance/${id}`, "_blank", "noopener")
 }
 
+/** Ouvre une ordonnance vierge : le papier a en-tete, a remplir a la main. */
+function openOrdonnanceVierge() {
+  window.open("/print/ordonnance-vierge", "_blank", "noopener")
+}
+
 export function ConsultationsClient({
   consultations,
   patients,
@@ -194,10 +199,16 @@ export function ConsultationsClient({
             <strong>{formatCurrency(totalCA)}</strong>
           </p>
         </div>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="w-4 h-4" />
-          Nouvelle consultation
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={openOrdonnanceVierge}>
+            <Printer className="w-4 h-4" />
+            Ordonnance vierge
+          </Button>
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="w-4 h-4" />
+            Nouvelle consultation
+          </Button>
+        </div>
       </div>
 
       <div className="border border-border rounded-lg bg-card overflow-hidden">

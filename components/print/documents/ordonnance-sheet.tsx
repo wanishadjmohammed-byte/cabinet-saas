@@ -10,11 +10,13 @@ export type OrdonnanceData = {
   patientPrenom: string
   age: number | null
   ordonnance: string | null
+  /** Exemplaire a remplir a la main : aucune valeur, aucun message d absence. */
+  vierge?: boolean
 }
 
 /** Ordonnance A5 — reprend la disposition du papier à en-tête du cabinet. */
 export function OrdonnanceSheet({ data }: { data: OrdonnanceData }) {
-  const dateStr = safeDate(data.date)
+  const dateStr = data.vierge ? "" : safeDate(data.date)
 
   return (
     <div className="sheet sheet-a5 flex flex-col">
@@ -70,7 +72,7 @@ export function OrdonnanceSheet({ data }: { data: OrdonnanceData }) {
       <div className="fmt-lg flex-1 overflow-hidden">
         {data.ordonnance?.trim() ? (
           <FormattedText source={data.ordonnance} color={PRINT_COLORS.ardoise} />
-        ) : (
+        ) : data.vierge ? null : (
           <p style={{ color: "#9CA3AF", fontSize: "10pt", fontStyle: "italic" }}>
             Aucune ordonnance saisie pour cette consultation.
           </p>
